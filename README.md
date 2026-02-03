@@ -18,3 +18,19 @@ $ conda create -n vu-app
 ```bash
 $ conda activate vu-app
 ```
+
+## Installation
+
+### Install the required packages
+
+```bash
+$pip install -r requirements.txt
+```
+
+### setup the environment variables
+
+```bash
+$ cp .env.example .env
+```
+
+set your environment variables in the `.env` file. Like `OPENAI_API_KEY` value.
