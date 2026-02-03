@@ -214,3 +214,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Audio/Video files (large files)
+*.mp3
+*.wav
+*.mp4
+*.webm
