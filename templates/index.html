@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-time Speech to Text</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        #status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            text-align: center;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .connecting { background: #fff3cd; color: #856404; }
+        #transcript { 
+            border: 1px solid #ddd; 
+            padding: 20px; 
+            min-height: 200px; 
+            background: #fafafa;
+            border-radius: 5px;
+        }
+        #partial { color: gray; font-style: italic; }
+        #final { line-height: 1.6; }
+        .btn { 
+            padding: 12px 24px; 
+            font-size: 16px; 
+            margin: 5px; 
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: opacity 0.2s;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-start { background: #28a745; color: white; }
+        .btn-stop { background: #dc3545; color: white; }
+        .btn-clear { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🎤 Real-time Speech to Text</h1>
+    
+    <div class="card">
+        <div id="status" class="disconnected">Click "Start Recording" to begin</div>
+        
+        <button id="startBtn" class="btn btn-start" onclick="startRecording()">
+            Start Recording
+        </button>
+        <button id="stopBtn" class="btn btn-stop" onclick="stopRecording()" disabled>
+            Stop Recording
+        </button>
+        <button class="btn btn-clear" onclick="clearTranscript()">
+            Clear
+        </button>
+    </div>
+    
+    <div class="card">
+        <h3>Transcript:</h3>
+        <div id="transcript">
+            <div id="final"></div>
+            <div id="partial"></div>
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let audioContext = null;
+        let processor = null;
+        let source = null;
+
+        async function startRecording() {
+            try {
+                updateStatus("Requesting microphone access...", "connecting");
+                
+                // Get microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+
+                updateStatus("Connecting to server...", "connecting");
+
+                // Connect to WebSocket
+                const wsUrl = `ws://${window.location.host}/api/stt/realtime`;
+                websocket = new WebSocket(wsUrl);
+                
+                websocket.onopen = () => {
+                    updateStatus("Connected - Speak now!", "connected");
+                    document.getElementById("startBtn").disabled = true;
+                    document.getElementById("stopBtn").disabled = false;
+                };
+
+                websocket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "final") {
+                        document.getElementById("final").innerHTML += data.text + " ";
+                        document.getElementById("partial").textContent = "";
+                    } else if (data.type === "partial") {
+                        document.getElementById("partial").textContent = data.text;
+                    }
+                };
+
+                websocket.onclose = () => {
+                    updateStatus("Disconnected", "disconnected");
+                    document.getElementById("startBtn").disabled = false;
+                    document.getElementById("stopBtn").disabled = true;
+                };
+
+                websocket.onerror = (error) => {
+                    console.error("WebSocket error:", error);
+                    updateStatus("Connection error", "disconnected");
+                };
+
+                // Setup audio processing
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                source = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                processor.onaudioprocess = (e) => {
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        const audioData = e.inputBuffer.getChannelData(0);
+                        const pcmData = convertFloat32ToInt16(audioData);
+                        const base64Audio = btoa(
+                            String.fromCharCode(...new Uint8Array(pcmData.buffer))
+                        );
+                        websocket.send(JSON.stringify({ audio: base64Audio }));
+                    }
+                };
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+            } catch (error) {
+                console.error("Error:", error);
+                updateStatus("Error: " + error.message, "disconnected");
+            }
+        }
+
+        function stopRecording() {
+            if (websocket) {
+                websocket.close();
+            }
+            if (processor) {
+                processor.disconnect();
+            }
+            if (source) {
+                source.disconnect();
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+        }
+
+        function clearTranscript() {
+            document.getElementById("final").innerHTML = "";
+            document.getElementById("partial").textContent = "";
+        }
+
+        function updateStatus(message, className) {
+            const status = document.getElementById("status");
+            status.textContent = message;
+            status.className = className;
+        }
+
+        function convertFloat32ToInt16(float32Array) {
+            const int16Array = new Int16Array(float32Array.length);
+            for (let i = 0; i < float32Array.length; i++) {
+                const s = Math.max(-1, Math.min(1, float32Array[i]));
+                int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return int16Array;
+        }
+    </script>
+</body>
+</html>
