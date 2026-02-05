@@ -1,79 +1,532 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Real-time Speech to Text</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Speech to Text | VU Platform</title>
     <style>
-        * { box-sizing: border-box; }
+        * { 
+            box-sizing: border-box; 
+            margin: 0;
+            padding: 0;
+        }
+        
         body { 
-            font-family: Arial, sans-serif; 
-            max-width: 900px; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1100px; 
             margin: 0 auto; 
-            padding: 20px;
-            background: #f5f5f5;
+            padding: 3rem 2rem;
+            background: #1f1f1f;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.875rem;
+            font-weight: 300;
+            line-height: 1.6;
+            min-height: 100vh;
         }
-        h1 { color: #333; }
+        
+        /* Header */
+        .header {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 0.7px solid #333333;
+        }
+        
+        h1 { 
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.03em;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1rem;
+            font-weight: 300;
+            margin-top: 0.5rem;
+        }
+        
+        /* Main Grid Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        
+        /* Card Styles */
         .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            margin: 20px 0;
+            background: #242424;
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 0.7px solid #333333;
+            transition: all 200ms ease;
+            position: relative;
+            overflow: hidden;
         }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #e64f28, #ff8b66);
+            opacity: 0;
+            transition: opacity 200ms ease;
+        }
+        
+        .card:hover {
+            border-color: #3a3a3a;
+        }
+        
+        .card:hover::before {
+            opacity: 1;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 0.7px solid #333333;
+        }
+        
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .card-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.625rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 0.7px solid #3a3a3a;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 400;
+        }
+        
+        /* Control Panel */
+        .control-panel {
+            background: linear-gradient(135deg, #262626 0%, #242424 100%);
+        }
+        
+        /* Status Indicator */
         #status { 
-            padding: 10px; 
-            margin: 10px 0; 
-            border-radius: 5px; 
-            text-align: center;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 400;
+            font-size: 0.875rem;
+            transition: all 300ms ease;
+            position: relative;
         }
-        .connected { background: #d4edda; color: #155724; }
-        .disconnected { background: #f8d7da; color: #721c24; }
-        .connecting { background: #fff3cd; color: #856404; }
-        #transcript { 
-            border: 1px solid #ddd; 
-            padding: 20px; 
-            min-height: 200px; 
-            background: #fafafa;
-            border-radius: 5px;
+        
+        #status::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            animation: pulse 2s ease-in-out infinite;
         }
-        #partial { color: gray; font-style: italic; }
-        #final { line-height: 1.6; }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+        
+        .connected { 
+            background: linear-gradient(135deg, #0d2419 0%, #165425 100%);
+            color: #5dd27a;
+            border: 0.7px solid #258d3f;
+        }
+        
+        .connected::before {
+            background: #34c759;
+            box-shadow: 0 0 10px #34c759;
+        }
+        
+        .disconnected { 
+            background: linear-gradient(135deg, #2a0f0f 0%, #6b1914 100%);
+            color: rgba(255, 59, 48, 0.9);
+            border: 0.7px solid #b52a22;
+        }
+        
+        .disconnected::before {
+            background: #ff3b30;
+            box-shadow: 0 0 10px #ff3b30;
+            animation: none;
+        }
+        
+        .connecting { 
+            background: linear-gradient(135deg, #2a2308 0%, #6b5600 100%);
+            color: #ffd633;
+            border: 0.7px solid #b59100;
+        }
+        
+        .connecting::before {
+            background: #ffcc00;
+            box-shadow: 0 0 10px #ffcc00;
+        }
+        
+        /* Button Group */
+        .button-group {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        
+        /* Buttons */
         .btn { 
-            padding: 12px 24px; 
-            font-size: 16px; 
-            margin: 5px; 
-            cursor: pointer;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            
+            height: 2.5rem;
+            padding: 0.5rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 400;
+            font-family: 'Inter', sans-serif;
+            
             border: none;
-            border-radius: 5px;
-            transition: opacity 0.2s;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            
+            transition: all 200ms ease;
+            outline: 2px solid transparent;
+            outline-offset: 2px;
         }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-start { background: #28a745; color: white; }
-        .btn-stop { background: #dc3545; color: white; }
-        .btn-clear { background: #6c757d; color: white; }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-color: transparent;
+            transition: background-color 200ms ease;
+            pointer-events: none;
+            border-radius: 0.5rem;
+        }
+        
+        .btn:disabled { 
+            opacity: 0.4;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn:focus-visible {
+            outline-color: rgba(230, 79, 40, 0.6);
+        }
+        
+        .btn-start { 
+            background: linear-gradient(135deg, #34c759 0%, #2fb551 100%);
+            color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2);
+            flex: 1;
+        }
+        
+        .btn-start:hover:not(:disabled) {
+            box-shadow: 0 6px 20px rgba(52, 199, 89, 0.3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-start:hover:not(:disabled)::before {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-start:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-start:active:not(:disabled)::before {
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-stop { 
+            background: linear-gradient(135deg, #ff3b30 0%, #e8362c 100%);
+            color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2);
+            flex: 1;
+        }
+        
+        .btn-stop:hover:not(:disabled) {
+            box-shadow: 0 6px 20px rgba(255, 59, 48, 0.3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-stop:hover:not(:disabled)::before {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-stop:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-stop:active:not(:disabled)::before {
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-clear { 
+            background: #262626;
+            color: rgba(255, 255, 255, 0.7);
+            border: 0.7px solid #3a3a3a;
+        }
+        
+        .btn-clear:hover:not(:disabled) {
+            border-color: #535353;
+            transform: translateY(-1px);
+        }
+        
+        .btn-clear:hover:not(:disabled)::before {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .btn-clear:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        .btn-clear:active:not(:disabled)::before {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Transcript Section */
+        .transcript-card {
+            background: linear-gradient(135deg, #242424 0%, #1f1f1f 100%);
+            min-height: 400px;
+        }
+        
+        #transcript { 
+            background: #292929;
+            border: 0.7px solid #333333;
+            padding: 2rem;
+            min-height: 350px;
+            border-radius: 0.75rem;
+            line-height: 1.9;
+            font-size: 0.9375rem;
+            position: relative;
+            overflow-y: auto;
+            max-height: 500px;
+        }
+        
+        #transcript::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #transcript::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        #transcript::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+            border-radius: 4px;
+        }
+        
+        #transcript::-webkit-scrollbar-thumb:hover {
+            background: #535353;
+        }
+        
+        #transcript:empty::before {
+            content: 'Transcript will appear here...';
+            color: rgba(255, 255, 255, 0.3);
+            font-style: italic;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+        }
+        
+        #partial { 
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            display: inline;
+        }
+        
+        #final { 
+            line-height: 1.9;
+            color: rgba(255, 255, 255, 0.9);
+            display: inline;
+        }
+        
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 0.7px solid #333333;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 400;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 2rem 1.25rem;
+            }
+            
+            h1 {
+                font-size: 1.875rem;
+            }
+            
+            .card {
+                padding: 1.5rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+            
+            #transcript {
+                min-height: 250px;
+                padding: 1.5rem;
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Loading Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .card {
+            animation: fadeIn 400ms ease forwards;
+        }
+        
+        .card:nth-child(1) { animation-delay: 0ms; }
+        .card:nth-child(2) { animation-delay: 100ms; }
     </style>
 </head>
 <body>
-    <h1>🎤 Real-time Speech to Text</h1>
-    
-    <div class="card">
-        <div id="status" class="disconnected">Click "Start Recording" to begin</div>
-        
-        <button id="startBtn" class="btn btn-start" onclick="startRecording()">
-            Start Recording
-        </button>
-        <button id="stopBtn" class="btn btn-stop" onclick="stopRecording()" disabled>
-            Stop Recording
-        </button>
-        <button class="btn btn-clear" onclick="clearTranscript()">
-            Clear
-        </button>
+    <div class="header">
+        <h1>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            Real-time Speech to Text
+        </h1>
+        <div class="subtitle">Convert your voice to text in real-time with AI-powered transcription</div>
     </div>
     
-    <div class="card">
-        <h3>Transcript:</h3>
-        <div id="transcript">
-            <div id="final"></div>
-            <div id="partial"></div>
+    <div class="main-grid">
+        <div class="card control-panel">
+            <div class="card-header">
+                <div class="card-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    Recording Controls
+                </div>
+                <div class="card-badge" id="statusBadge">Idle</div>
+            </div>
+            
+            <div id="status" class="disconnected">
+                Click "Start Recording" to begin transcription
+            </div>
+            
+            <div class="button-group">
+                <button id="startBtn" class="btn btn-start" onclick="startRecording()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                    Start Recording
+                </button>
+                <button id="stopBtn" class="btn btn-stop" onclick="stopRecording()" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                    </svg>
+                    Stop Recording
+                </button>
+                <button class="btn btn-clear" onclick="clearTranscript()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    Clear
+                </button>
+            </div>
+        </div>
+        
+        <div class="card transcript-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    Live Transcript
+                </div>
+                <div class="card-badge" id="wordCount">0 words</div>
+            </div>
+            
+            <div id="transcript">
+                <span id="final"></span>
+                <span id="partial"></span>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" id="statsStatus">Disconnected</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Duration</div>
+                    <div class="stat-value" id="duration">00:00</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Words</div>
+                    <div class="stat-value" id="statsWords">0</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -82,12 +535,30 @@
         let audioContext = null;
         let processor = null;
         let source = null;
+        let startTime = null;
+        let durationInterval = null;
+
+        function updateWordCount() {
+            const text = document.getElementById("final").textContent;
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+            const count = words.length;
+            document.getElementById("wordCount").textContent = count + " words";
+            document.getElementById("statsWords").textContent = count;
+        }
+
+        function updateDuration() {
+            if (!startTime) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById("duration").textContent = minutes + ":" + seconds;
+        }
 
         async function startRecording() {
             try {
                 updateStatus("Requesting microphone access...", "connecting");
+                updateStatsStatus("Connecting");
                 
-                // Get microphone access
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         sampleRate: 16000,
@@ -99,14 +570,18 @@
 
                 updateStatus("Connecting to server...", "connecting");
 
-                // Connect to WebSocket
                 const wsUrl = `ws://${window.location.host}/api/stt/realtime`;
                 websocket = new WebSocket(wsUrl);
                 
                 websocket.onopen = () => {
                     updateStatus("Connected - Speak now!", "connected");
+                    updateStatsStatus("Recording");
                     document.getElementById("startBtn").disabled = true;
                     document.getElementById("stopBtn").disabled = false;
+                    document.getElementById("statusBadge").textContent = "Live";
+                    
+                    startTime = Date.now();
+                    durationInterval = setInterval(updateDuration, 1000);
                 };
 
                 websocket.onmessage = (event) => {
@@ -114,6 +589,7 @@
                     if (data.type === "final") {
                         document.getElementById("final").innerHTML += data.text + " ";
                         document.getElementById("partial").textContent = "";
+                        updateWordCount();
                     } else if (data.type === "partial") {
                         document.getElementById("partial").textContent = data.text;
                     }
@@ -121,16 +597,23 @@
 
                 websocket.onclose = () => {
                     updateStatus("Disconnected", "disconnected");
+                    updateStatsStatus("Disconnected");
                     document.getElementById("startBtn").disabled = false;
                     document.getElementById("stopBtn").disabled = true;
+                    document.getElementById("statusBadge").textContent = "Idle";
+                    
+                    if (durationInterval) {
+                        clearInterval(durationInterval);
+                        durationInterval = null;
+                    }
                 };
 
                 websocket.onerror = (error) => {
                     console.error("WebSocket error:", error);
                     updateStatus("Connection error", "disconnected");
+                    updateStatsStatus("Error");
                 };
 
-                // Setup audio processing
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 source = audioContext.createMediaStreamSource(stream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
@@ -152,6 +635,7 @@
             } catch (error) {
                 console.error("Error:", error);
                 updateStatus("Error: " + error.message, "disconnected");
+                updateStatsStatus("Error");
             }
         }
 
@@ -168,17 +652,31 @@
             if (audioContext) {
                 audioContext.close();
             }
+            if (durationInterval) {
+                clearInterval(durationInterval);
+                durationInterval = null;
+            }
         }
 
         function clearTranscript() {
             document.getElementById("final").innerHTML = "";
             document.getElementById("partial").textContent = "";
+            updateWordCount();
+            
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                document.getElementById("duration").textContent = "00:00";
+                startTime = null;
+            }
         }
 
         function updateStatus(message, className) {
             const status = document.getElementById("status");
             status.textContent = message;
             status.className = className;
+        }
+
+        function updateStatsStatus(status) {
+            document.getElementById("statsStatus").textContent = status;
         }
 
         function convertFloat32ToInt16(float32Array) {
