@@ -124,11 +124,12 @@ class TestAddTabSwitch:
 
 
 class TestCompleteQuestion:
-    def test_complete_question(self):
+    @pytest.mark.asyncio
+    async def test_complete_question(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
         mgr.add_answer(session.id, "q1", "transcript", 60, "t1", "t2")
-        mgr.complete_question(
+        await mgr.complete_question(
             session.id, "q1",
             ai_feedback="Good answer",
             score=75.0,
@@ -141,49 +142,80 @@ class TestCompleteQuestion:
         assert retrieved.answers[0].strengths == ["clarity"]
         assert retrieved.answers[0].areasToImprove == ["depth"]
 
+    @pytest.mark.asyncio
+    async def test_complete_question_persists_to_backend(self):
+        from unittest.mock import AsyncMock
+        mock_bc = AsyncMock()
+        mock_bc.create_question = AsyncMock(return_value=True)
+        mgr = SessionManager(backend_client=mock_bc)
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        mgr.add_answer(session.id, "q1", "transcript", 60, "t1", "t2")
+        await mgr.complete_question(
+            session.id, "q1",
+            ai_feedback="Good",
+            score=80.0,
+        )
+        mock_bc.create_question.assert_called_once()
+
 
 class TestEndSession:
-    def test_end_session_returns_performance(self):
+    @pytest.mark.asyncio
+    async def test_end_session_returns_performance(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
         mgr.add_answer(session.id, "q1", "transcript", 60, "t1", "t2")
-        mgr.complete_question(session.id, "q1", ai_feedback="Good", score=80.0)
-        result = mgr.end_session(session.id)
+        await mgr.complete_question(session.id, "q1", ai_feedback="Good", score=80.0)
+        result = await mgr.end_session(session.id)
         assert isinstance(result, PerformanceResult)
         assert result.score == 80.0
 
-    def test_end_session_classifies_cheat(self):
+    @pytest.mark.asyncio
+    async def test_end_session_classifies_cheat(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
         mgr.add_tab_switch(session.id, 5)
-        result = mgr.end_session(session.id)
+        result = await mgr.end_session(session.id)
         assert result.cheat.level == "Flagged"
         assert result.cheat.evidence.tabSwitches == 5
 
-    def test_end_session_clean_cheat(self):
+    @pytest.mark.asyncio
+    async def test_end_session_clean_cheat(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
-        result = mgr.end_session(session.id)
+        result = await mgr.end_session(session.id)
         assert result.cheat.level == "Clean"
         assert result.cheat.evidence.tabSwitches == 0
 
-    def test_end_session_critical_cheat(self):
+    @pytest.mark.asyncio
+    async def test_end_session_critical_cheat(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
         mgr.add_tab_switch(session.id, 7)
-        result = mgr.end_session(session.id)
+        result = await mgr.end_session(session.id)
         assert result.cheat.level == "Critical"
 
-    def test_end_session_unknown_raises(self):
+    @pytest.mark.asyncio
+    async def test_end_session_unknown_raises(self):
         mgr = SessionManager()
         with pytest.raises(ValueError):
-            mgr.end_session("unknown")
+            await mgr.end_session("unknown")
 
-    def test_end_session_removes_from_manager(self):
+    @pytest.mark.asyncio
+    async def test_end_session_removes_from_manager(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
-        mgr.end_session(session.id)
+        await mgr.end_session(session.id)
         assert mgr.get_session(session.id) is None
+
+    @pytest.mark.asyncio
+    async def test_end_session_persists_to_backend(self):
+        from unittest.mock import AsyncMock
+        mock_bc = AsyncMock()
+        mock_bc.create_performance = AsyncMock(return_value=True)
+        mgr = SessionManager(backend_client=mock_bc)
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        await mgr.end_session(session.id)
+        mock_bc.create_performance.assert_called_once()
 
 
 class TestCleanupExpired:

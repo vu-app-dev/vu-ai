@@ -54,24 +54,26 @@ class TestSessionManagerIntegration:
         assert retrieved is not None
         assert retrieved.id == session.id
 
-    def test_end_session_returns_performance(self):
+    @pytest.mark.asyncio
+    async def test_end_session_returns_performance(self):
         mgr = SessionManager()
         session = mgr.create_session(
             mock_id="m1", candidate_id="c1", cv_url="https://example.com/cv.pdf"
         )
-        result = mgr.end_session(session.id)
+        result = await mgr.end_session(session.id)
         assert result.cheat.level == "Clean"
 
-    def test_session_workflow_add_answer_and_tab_switch(self):
+    @pytest.mark.asyncio
+    async def test_session_workflow_add_answer_and_tab_switch(self):
         mgr = SessionManager()
         session = mgr.create_session(
             mock_id="m1", candidate_id="c1", cv_url="https://example.com/cv.pdf"
         )
         mgr.add_answer(session.id, "q1", "I think React is great", 60, "t1", "t2")
         mgr.add_tab_switch(session.id, 3)
-        mgr.complete_question(session.id, "q1", ai_feedback="Good", score=75.0)
+        await mgr.complete_question(session.id, "q1", ai_feedback="Good", score=75.0)
 
-        result = mgr.end_session(session.id)
+        result = await mgr.end_session(session.id)
         assert result.cheat.level == "Flagged"
         assert result.cheat.evidence.tabSwitches == 3
         assert result.score == 75.0

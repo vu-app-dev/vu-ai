@@ -53,11 +53,13 @@ class SessionManager:
         self,
         session_timeout_seconds: int = DEFAULT_SESSION_TIMEOUT_SECONDS,
         time_limit_buffer_seconds: int = TIME_LIMIT_BUFFER_SECONDS,
+        backend_client=None,
     ):
         self._sessions: dict[str, Session] = {}
         self._tokens: dict[str, str] = {}
         self._session_timeout = session_timeout_seconds
         self._time_limit_buffer = time_limit_buffer_seconds
+        self._backend_client = backend_client
 
     def create_session(
         self,
@@ -146,7 +148,7 @@ class SessionManager:
         session.tabSwitches = max(session.tabSwitches, count)
         session.touch()
 
-    def complete_question(
+    async def complete_question(
         self,
         session_id: str,
         question_id: str,
@@ -167,7 +169,31 @@ class SessionManager:
                 break
         session.touch()
 
-    def end_session(self, session_id: str) -> PerformanceResult:
+        if self._backend_client:
+            try:
+                await self._backend_client.create_question(
+                    session.candidateId,
+                    data={
+                        "question": question_id,
+                        "answer": next(
+                            (a.transcript for a in session.answers if a.questionId == question_id), ""
+                        ),
+                        "aiFeedback": ai_feedback,
+                        "score": score,
+                        "strengths": strengths or [],
+                        "areasToImprove": areas_to_improve or [],
+                        "durationInMinutes": round(
+                            next(
+                                (a.durationSeconds for a in session.answers if a.questionId == question_id), 0
+                            ) / 60, 2
+                        ),
+                    },
+                    idempotency_key=f"{session_id}-{question_id}-1",
+                )
+            except Exception as e:
+                logger.warning("Failed to persist question to backend: %s", e)
+
+    async def end_session(self, session_id: str) -> PerformanceResult:
         session = self._sessions.get(session_id)
         if session is None:
             raise ValueError(f"Session {session_id} not found")
@@ -189,6 +215,17 @@ class SessionManager:
             cheat=cheat,
         )
         logger.info("Ended session %s, score=%.1f, cheat=%s", session_id, total_score, cheat.level)
+
+        if self._backend_client:
+            try:
+                await self._backend_client.create_performance(
+                    session.candidateId,
+                    data=result.model_dump(),
+                    idempotency_key=f"{session_id}-performance",
+                )
+            except Exception as e:
+                logger.warning("Failed to persist performance to backend: %s", e)
+
         self._remove_session(session_id)
         return result
 
