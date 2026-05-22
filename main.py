@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from config import settings
-from routers import transcription_router
+from routers import transcription_router, interview_router
 
 app = FastAPI(
     title="VU - AI Interview Assistant",
@@ -20,11 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(transcription_router)
-
-# Future routers will be included here:
-# from routers import interview_router, cv_router
-# app.include_router(interview_router)
-# app.include_router(cv_router)
+app.include_router(interview_router)
 
 
 @app.get("/")
