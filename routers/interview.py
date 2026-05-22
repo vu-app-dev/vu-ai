@@ -1,12 +1,11 @@
 import logging
-from datetime import datetime, timezone
 from typing import Optional
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query
 
 from clients.backend_client import backend_client
 from models.interview import (
+    Question,
     CheatClassification,
     StartSessionRequest,
     StartSessionResponse,
@@ -21,7 +20,6 @@ from models.interview import (
 from services.interview.cheat_detector import CheatDetector
 from services.interview.question_generator import QuestionGenerator
 from services.interview.session_manager import SessionManager
-from services.llm.gemini_service import GeminiService
 from services.scoring.score_aggregator import ScoreAggregator
 from services.scoring.transcript_scorer import TranscriptScorer
 
@@ -45,11 +43,28 @@ def _get_score_aggregator() -> ScoreAggregator:
     return ScoreAggregator()
 
 
+FALLBACK_MOCK_DATA = {
+    "type": "TECHNICAL",
+    "difficulty": "MEDIUM",
+    "technologies": ["React", "Node.js", "JavaScript"],
+    "topics": ["frontend", "APIs", "system design"],
+    "estimatedTimeInMinutes": 30,
+    "questions": [
+        {"title": "React Hooks", "description": "Explain how useEffect cleanup works and when it runs", "order": 1, "difficulty": "MEDIUM"},
+        {"title": "REST vs GraphQL", "description": "Compare REST and GraphQL for building APIs", "order": 2, "difficulty": "MEDIUM"},
+        {"title": "System Design", "description": "How would you design a real-time chat application?", "order": 3, "difficulty": "HARD"},
+        {"title": "JavaScript Closures", "description": "Explain closures and give a practical example", "order": 4, "difficulty": "EASY"},
+        {"title": "Performance Optimization", "description": "What techniques would you use to optimize a slow React app?", "order": 5, "difficulty": "HARD"},
+    ],
+}
+
+
 @router.post("/start", response_model=StartSessionResponse)
 async def start_session(request: StartSessionRequest):
     mock_data = await backend_client.get_mock(request.mockId)
     if mock_data is None:
-        raise HTTPException(status_code=404, detail=f"Mock {request.mockId} not found")
+        logger.info("Backend unreachable or mock not found, using fallback mock data")
+        mock_data = FALLBACK_MOCK_DATA
 
     session = session_manager.create_session(
         mock_id=request.mockId,
@@ -98,7 +113,6 @@ async def start_session(request: StartSessionRequest):
         order=1,
         speechType="question",
     )
-    from models.interview import Question as QuestionModel
     session.questionsAsked = [q.model_dump() for q in questions]
 
     return StartSessionResponse(
@@ -174,8 +188,7 @@ async def interview_websocket(
 
     if session.questionsAsked:
         first_q_data = session.questionsAsked[0]
-        from models.interview import Question as QuestionModel
-        first_q = QuestionModel(**first_q_data) if isinstance(first_q_data, dict) else first_q_data
+        first_q = Question(**first_q_data) if isinstance(first_q_data, dict) else first_q_data
         question_msg = WSQuestionMessage(
             sessionId=session_id,
             id=first_q.id,
@@ -297,8 +310,7 @@ async def _handle_answer(
     if next_idx < len(session.questionsAsked):
         session.currentQuestionIndex = next_idx
         next_q_data = session.questionsAsked[next_idx]
-        from models.interview import Question as QuestionModel
-        next_q = QuestionModel(**next_q_data) if isinstance(next_q_data, dict) else next_q_data
+        nq = Question(**next_q_data) if isinstance(next_q_data, dict) else next_q_data
         next_question_msg = WSQuestionMessage(
             sessionId=session_id,
             id=next_q.id,
