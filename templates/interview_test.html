@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VU Interview Test Page</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 16px; color: #60a5fa; }
+        h2 { font-size: 1.1rem; margin: 16px 0 8px; color: #94a3b8; }
+        .card { background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .form-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+        label { font-size: 0.85rem; color: #94a3b8; min-width: 100px; }
+        input, select { background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0; padding: 8px 12px; flex: 1; }
+        button { background: #3b82f6; color: white; border: none; border-radius: 4px; padding: 8px 16px; cursor: pointer; font-size: 0.9rem; }
+        button:hover { background: #2563eb; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+        .btn-danger { background: #ef4444; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-success { background: #22c55e; }
+        .btn-success:hover { background: #16a34a; }
+        #log { background: #0f172a; border: 1px solid #334155; border-radius: 4px; height: 400px; overflow-y: auto; padding: 12px; font-family: 'Fira Code', monospace; font-size: 0.8rem; }
+        .log-in { color: #60a5fa; }
+        .log-out { color: #f97316; }
+        .log-error { color: #ef4444; }
+        .log-success { color: #22c55e; }
+        .log-system { color: #94a3b8; }
+        .status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .status-connected { background: #22c55e; }
+        .status-disconnected { background: #ef4444; }
+        .chat-area { display: flex; flex-direction: column; gap: 8px; }
+        .message { padding: 8px 12px; border-radius: 8px; max-width: 80%; }
+        .message.ai { background: #1e3a5f; align-self: flex-start; }
+        .message.user { background: #1e293b; border: 1px solid #334155; align-self: flex-end; }
+        .tab-switch-counter { font-size: 1.2rem; font-weight: bold; color: #f97316; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VU Interview - Test Page</h1>
+
+        <div class="card">
+            <h2>Session Configuration</h2>
+            <div class="form-row">
+                <label>Mock ID:</label>
+                <input type="text" id="mockId" value="mock-1" placeholder="Mock ID">
+            </div>
+            <div class="form-row">
+                <label>Candidate ID:</label>
+                <input type="text" id="candidateId" value="candidate-1" placeholder="Candidate ID">
+            </div>
+            <div class="form-row">
+                <label>CV URL:</label>
+                <input type="text" id="cvUrl" value="" placeholder="https://example.com/cv.pdf">
+            </div>
+            <div class="form-row">
+                <button id="btnStart" onclick="startSession()">Start Interview</button>
+                <button id="btnEnd" onclick="endSession()" disabled>End Session</button>
+                <button class="btn-danger" id="btnDisconnect" onclick="disconnectWS()" disabled>Disconnect</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span id="statusDot" class="status status-disconnected"></span>Connection Status: <span id="statusText">Disconnected</span></h2>
+            <div class="form-row">
+                <span>Tab switches: </span>
+                <span id="tabCount" class="tab-switch-counter">0</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Interview Chat</h2>
+            <div id="chatArea" class="chat-area" style="min-height: 150px; max-height: 250px; overflow-y: auto;"></div>
+            <div class="form-row" style="margin-top: 8px;">
+                <label>Answer:</label>
+                <input type="text" id="answerInput" placeholder="Type your answer..." disabled>
+                <button id="btnSendAnswer" onclick="sendAnswer()" disabled>Send Answer</button>
+            </div>
+            <div class="form-row">
+                <label>Question ID:</label>
+                <input type="text" id="questionId" value="" placeholder="Auto-filled">
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Actions</h2>
+            <div class="form-row">
+                <button onclick="sendVideoFrame()">Send Video Frame</button>
+                <button onclick="incrementTabSwitch()">Simulate Tab Switch</button>
+                <button onclick="sendEndSession()">End Session (WS)</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Log</h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api/interview';
+        let ws = null;
+        let sessionId = null;
+        let sessionToken = null;
+        let currentQuestionId = null;
+        let tabSwitchCount = 0;
+        let startedAt = null;
+
+        function log(msg, cls = '') {
+            const el = document.getElementById('log');
+            const line = document.createElement('div');
+            line.className = cls;
+            const time = new Date().toLocaleTimeString();
+            line.textContent = `[${time}] ${msg}`;
+            el.appendChild(line);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function addChatMessage(text, sender = 'ai') {
+            const area = document.getElementById('chatArea');
+            const msg = document.createElement('div');
+            msg.className = `message ${sender}`;
+            msg.textContent = text;
+            area.appendChild(msg);
+            area.scrollTop = area.scrollHeight;
+        }
+
+        function setStatus(connected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (connected) {
+                dot.className = 'status status-connected';
+                text.textContent = 'Connected';
+            } else {
+                dot.className = 'status status-disconnected';
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        async function startSession() {
+            const mockId = document.getElementById('mockId').value;
+            const candidateId = document.getElementById('candidateId').value;
+            const cvUrl = document.getElementById('cvUrl').value;
+
+            log('Starting interview session...', 'log-system');
+
+            try {
+                const response = await fetch(`${API_BASE}/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mockId, candidateId, cvUrl: cvUrl || 'https://example.com/cv.pdf' })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    log(`Start failed: ${response.status} - ${err.detail}`, 'log-error');
+                    return;
+                }
+
+                const data = await response.json();
+                sessionId = data.sessionId;
+                sessionToken = data.sessionToken;
+
+                log(`Session started: ${sessionId}`, 'log-success');
+                log(`Intro: ${data.intro}`, 'log-in');
+                addChatMessage(data.intro, 'ai');
+
+                if (data.firstQuestion) {
+                    currentQuestionId = data.firstQuestion.id;
+                    document.getElementById('questionId').value = currentQuestionId;
+                    addChatMessage(`[Q${data.firstQuestion.order}] ${data.firstQuestion.text}`, 'ai');
+                    log(`First question: ${data.firstQuestion.text}`, 'log-in');
+                }
+
+                document.getElementById('btnStart').disabled = true;
+                document.getElementById('btnEnd').disabled = false;
+                document.getElementById('btnDisconnect').disabled = false;
+                document.getElementById('answerInput').disabled = false;
+                document.getElementById('btnSendAnswer').disabled = false;
+                startedAt = new Date().toISOString();
+
+                connectWS();
+            } catch (e) {
+                log(`Error starting session: ${e}`, 'log-error');
+            }
+        }
+
+        function connectWS() {
+            if (!sessionId || !sessionToken) {
+                log('No session to connect to', 'log-error');
+                return;
+            }
+
+            const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${API_BASE}/session/${sessionId}?token=${sessionToken}`;
+            log(`Connecting WS: ${wsUrl}`, 'log-system');
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                setStatus(true);
+                log('WebSocket connected', 'log-success');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWSMessage(data);
+            };
+
+            ws.onclose = () => {
+                setStatus(false);
+                log('WebSocket disconnected', 'log-system');
+            };
+
+            ws.onerror = (err) => {
+                log('WebSocket error', 'log-error');
+            };
+        }
+
+        function handleWSMessage(data) {
+            switch (data.type) {
+                case 'intro':
+                    log(`[INTRO] ${data.text}`, 'log-in');
+                    addChatMessage(data.text, 'ai');
+                    break;
+                case 'question':
+                    currentQuestionId = data.id;
+                    document.getElementById('questionId').value = data.id;
+                    log(`[QUESTION #${data.order}] ${data.text} (${data.difficulty}, ${data.speechType})`, 'log-in');
+                    addChatMessage(`[Q${data.order}] ${data.text}`, 'ai');
+                    startedAt = new Date().toISOString();
+                    break;
+                case 'acknowledgement':
+                    log(`[FEEDBACK] ${data.text}`, 'log-in');
+                    addChatMessage(data.text, 'ai');
+                    break;
+                case 'cheat_warning':
+                    log(`[CHEAT WARNING] ${data.level}: ${data.reason}`, 'log-error');
+                    break;
+                case 'analysis_update':
+                    log(`[ANALYSIS] Eye contact: ${data.eyeContactScore ?? 'N/A'}`, 'log-system');
+                    break;
+                case 'session_end':
+                    log(`[SESSION END] Reason: ${data.reason}, Cheat: ${data.cheat}`, 'log-success');
+                    if (data.performance) {
+                        log(`Score: ${data.performance.score}`, 'log-success');
+                        log(`Cheat evidence: ${JSON.stringify(data.cheatEvidence)}`, 'log-system');
+                    }
+                    disconnectWS();
+                    document.getElementById('btnStart').disabled = false;
+                    document.getElementById('btnEnd').disabled = true;
+                    document.getElementById('answerInput').disabled = true;
+                    document.getElementById('btnSendAnswer').disabled = true;
+                    break;
+                case 'error':
+                    log(`[ERROR] ${data.code}: ${data.message} (retryable: ${data.retryable})`, 'log-error');
+                    break;
+                default:
+                    log(`[UNKNOWN] ${JSON.stringify(data)}`, 'log-system');
+            }
+        }
+
+        function sendAnswer() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected', 'log-error');
+                return;
+            }
+
+            const transcript = document.getElementById('answerInput').value;
+            const questionId = document.getElementById('questionId').value || currentQuestionId;
+            const endedAt = new Date().toISOString();
+            const durationSeconds = startedAt ? Math.round((Date.now() - new Date(startedAt).getTime()) / 1000) : 60;
+
+            if (!transcript.trim()) {
+                log('Please enter an answer', 'log-error');
+                return;
+            }
+
+            const msg = {
+                type: 'answer',
+                sessionId: sessionId,
+                questionId: questionId,
+                transcript: transcript,
+                durationSeconds: durationSeconds,
+                startedAt: startedAt,
+                endedAt: endedAt,
+            };
+
+            ws.send(JSON.stringify(msg));
+            log(`[SENT] Answer for ${questionId}: "${transcript.substring(0, 50)}..."`, 'log-out');
+            addChatMessage(transcript, 'user');
+            document.getElementById('answerInput').value = '';
+        }
+
+        function sendVideoFrame() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected', 'log-error');
+                return;
+            }
+
+            const msg = {
+                type: 'video_frame',
+                sessionId: sessionId,
+                image: '',
+                frameNumber: Math.floor(Math.random() * 100),
+                timestamp: Math.floor(Date.now() / 1000),
+            };
+
+            ws.send(JSON.stringify(msg));
+            log(`[SENT] Video frame #${msg.frameNumber}`, 'log-out');
+        }
+
+        function incrementTabSwitch() {
+            tabSwitchCount++;
+            document.getElementById('tabCount').textContent = tabSwitchCount;
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected', 'log-error');
+                return;
+            }
+
+            const msg = {
+                type: 'tab_switch',
+                sessionId: sessionId,
+                totalCount: tabSwitchCount,
+            };
+
+            ws.send(JSON.stringify(msg));
+            log(`[SENT] Tab switch count: ${tabSwitchCount}`, 'log-out');
+        }
+
+        function sendEndSession() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected', 'log-error');
+                return;
+            }
+
+            const msg = {
+                type: 'end_session',
+                sessionId: sessionId,
+            };
+
+            ws.send(JSON.stringify(msg));
+            log('[SENT] End session request', 'log-out');
+        }
+
+        function endSession() {
+            fetch(`${API_BASE}/end/${sessionId}`, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    log(`[REST END] ${JSON.stringify(data)}`, 'log-success');
+                    disconnectWS();
+                    document.getElementById('btnStart').disabled = false;
+                    document.getElementById('btnEnd').disabled = true;
+                    document.getElementById('answerInput').disabled = true;
+                    document.getElementById('btnSendAnswer').disabled = true;
+                })
+                .catch(e => log(`Error ending session: ${e}`, 'log-error'));
+        }
+
+        function disconnectWS() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                setStatus(false);
+            }
+        }
+
+        document.getElementById('answerInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendAnswer();
+        });
+    </script>
+</body>
+</html>
