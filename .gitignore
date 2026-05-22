@@ -220,3 +220,10 @@ __marimo__/
 *.wav
 *.mp4
 *.webm
+
+# CV uploads (temporary processing)
+assets/cvs/
+
+# Test artifacts
+tests/fixtures/*.pdf
+tests/fixtures/*.docx

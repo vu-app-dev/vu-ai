@@ -3,18 +3,40 @@ import os
 
 load_dotenv()
 
+
 class Settings:
     ASSEMBLYAI_API_KEY: str = os.getenv("ASSEMBLYAI_API_KEY", "")
-    
-    SampleRate: int = 16000
-    Language: str = "en"
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:3000")
+    BACKEND_API_KEY: str = os.getenv("BACKEND_API_KEY", "")
+
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    HOST: str = os.getenv("HOST", "0.0.0.0")
+    PORT: int = int(os.getenv("PORT", "8000"))
+
+    SAMPLE_RATE: int = 16000
+    LANGUAGE: str = "en"
+
+    SESSION_TIMEOUT_SECONDS: int = int(os.getenv("SESSION_TIMEOUT_SECONDS", "120"))
+    LLM_MAX_RETRIES: int = 3
+    LLM_RPM_LIMIT: int = 15
+    BACKEND_RETRY_MAX_ATTEMPTS: int = 5
+    BACKEND_RETRY_INTERVAL_SECONDS: int = 30
+    BACKEND_RETRY_QUEUE_MAX_SIZE: int = 50
+    CV_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
+    CV_DOWNLOAD_TIMEOUT_SECONDS: int = 30
 
     def validate(self):
+        missing = []
         if not self.ASSEMBLYAI_API_KEY:
-            raise ValueError("ASSEMBLYAI_API_KEY is not set in environment variables.")
+            missing.append("ASSEMBLYAI_API_KEY")
+        if not self.GEMINI_API_KEY:
+            missing.append("GEMINI_API_KEY")
+        if missing:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+
 
 settings = Settings()
 settings.validate()
