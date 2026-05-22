@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/interview", tags=["interview"])
 
-session_manager = SessionManager()
+session_manager = SessionManager(backend_client=backend_client)
 cheat_detector = CheatDetector()
 
 
@@ -133,16 +133,7 @@ async def end_session_via_rest(session_id: str):
     if session.status == "completed":
         raise HTTPException(status_code=409, detail="Session already ended")
 
-    result = session_manager.end_session(session_id)
-
-    try:
-        await backend_client.create_performance(
-            session.candidateId,
-            data=result.model_dump(),
-            idempotency_key=f"{session_id}-performance",
-        )
-    except Exception as e:
-        logger.warning("Failed to persist performance to backend: %s", e)
+    result = await session_manager.end_session(session_id)
 
     return {
         "performance": result.model_dump(),
@@ -296,7 +287,7 @@ async def _handle_answer(
     )
     await websocket.send_json(acknowledgement.model_dump())
 
-    session_manager.complete_question(
+    await session_manager.complete_question(
         session_id, question_id,
         ai_feedback=feedback_text,
         score=score_aggregator.compute_weighted_average(scores),
@@ -369,16 +360,7 @@ async def _handle_end_session(
     session_id: str,
     session,
 ):
-    result = session_manager.end_session(session_id)
-
-    try:
-        await backend_client.create_performance(
-            session.candidateId,
-            data=result.model_dump(),
-            idempotency_key=f"{session_id}-performance",
-        )
-    except Exception as e:
-        logger.warning("Failed to persist performance to backend: %s", e)
+    result = await session_manager.end_session(session_id)
 
     end_msg = WSSessionEndMessage(
         sessionId=session_id,
