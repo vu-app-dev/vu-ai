@@ -24,9 +24,9 @@ app.include_router(interview_router)
 
 
 @app.get("/")
-async def serve_frontend():
-    """Serve the test page"""
-    return FileResponse("templates/index.html")
+async def serve_interview_test():
+    """Serve the interview test page"""
+    return FileResponse("templates/interview_test.html")
 
 
 @app.get("/health")

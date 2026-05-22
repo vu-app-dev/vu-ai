@@ -11,15 +11,19 @@ client = TestClient(app)
 
 
 class TestStartSession:
-    def test_start_returns_error_without_mock(self):
+    def test_start_uses_fallback_when_backend_unreachable(self):
         with patch("routers.interview.backend_client") as mock_bc:
             mock_bc.get_mock = AsyncMock(return_value=None)
             response = client.post("/api/interview/start", json={
-                "mockId": "nonexistent",
+                "mockId": "mock-1",
                 "candidateId": "c1",
                 "cvUrl": "https://example.com/cv.pdf",
             })
-            assert response.status_code == 404
+            assert response.status_code == 200
+            data = response.json()
+            assert "sessionId" in data
+            assert "sessionToken" in data
+            assert data["intro"] is not None
 
 
 class TestEndSessionREST:
