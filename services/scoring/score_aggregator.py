@@ -10,7 +10,7 @@ from models.scoring import (
     VideoScores,
 )
 from prompts import format_prompt
-from services.llm.gemini_service import GeminiService
+from services.llm.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +18,9 @@ DEFAULT_WEIGHTS = ScoreWeights()
 
 
 class ScoreAggregator:
-    def __init__(self, weights: ScoreWeights | None = None, gemini_service: GeminiService | None = None):
-        self._weights = weights or DEFAULT_WEIGHTS
-        self._gemini = gemini_service or GeminiService()
+    def __init__(self, weights: ScoreWeights | None = None, llm: LLMService | None = None):
+        self._weights = weights or ScoreWeights()
+        self._llm = llm or LLMService()
 
     def compute_weighted_average(
         self,
@@ -87,7 +87,7 @@ class ScoreAggregator:
                 questions_answered=questions_answered,
             )
 
-            response = await self._gemini.generate_json(prompt, LLMAdjustment)
+            response = await self._llm.generate_json(prompt, LLMAdjustment)
 
             if response:
                 return LLMAdjustment(

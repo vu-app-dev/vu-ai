@@ -5,9 +5,22 @@ from pydantic import BaseModel, Field
 
 from models.interview import Question
 from prompts import format_prompt
-from services.llm.gemini_service import GeminiService
+from services.llm.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_str_list(items: list) -> list[str]:
+    """Convert a list that may contain dicts to a list of strings."""
+    result = []
+    for item in items:
+        if isinstance(item, str):
+            result.append(item)
+        elif isinstance(item, dict):
+            result.append(item.get("title", item.get("name", item.get("text", str(item)))))
+        else:
+            result.append(str(item))
+    return result
 
 
 class _QuestionItem(BaseModel):
@@ -26,8 +39,8 @@ class _IntroResponse(BaseModel):
 
 
 class QuestionGenerator:
-    def __init__(self, gemini_service: GeminiService | None = None):
-        self._gemini = gemini_service or GeminiService()
+    def __init__(self, llm: LLMService | None = None):
+        self._llm = llm or LLMService()
 
     async def generate_questions(
         self,
@@ -37,8 +50,8 @@ class QuestionGenerator:
         mock_questions = mock_data.get("questions", [])
         mock_type = mock_data.get("type", "TECHNICAL")
         difficulty = mock_data.get("difficulty", "MEDIUM")
-        technologies = mock_data.get("technologies", [])
-        topics = mock_data.get("topics", [])
+        technologies = _normalize_str_list(mock_data.get("technologies", []))
+        topics = _normalize_str_list(mock_data.get("topics", []))
         estimated_time = mock_data.get("estimatedTimeInMinutes", 30)
 
         try:
@@ -58,7 +71,7 @@ class QuestionGenerator:
                 cv_skills_section="CV Skills: " + ", ".join(cv_skills) if cv_skills else "",
             )
 
-            response = await self._gemini.generate_json(
+            response = await self._llm.generate_json(
                 prompt,
                 _GenerateQuestionsResponse,
             )
@@ -102,7 +115,7 @@ class QuestionGenerator:
                 cv_summary=cv_summary,
             )
 
-            response = await self._gemini.generate_json(
+            response = await self._llm.generate_json(
                 prompt,
                 _IntroResponse,
             )
@@ -116,46 +129,86 @@ class QuestionGenerator:
         return self._fallback_intro(mock_type, technologies or [])
 
     @staticmethod
-    def _format_existing_questions(questions: list[dict]) -> str:
+    def _format_existing_questions(questions: list) -> str:
         if not questions:
             return "None yet — this is the first set."
         lines = []
         for q in questions:
-            title = q.get("title", "Untitled")
-            desc = q.get("description", "")
-            difficulty = q.get("difficulty", "MEDIUM")
-            lines.append(f"- [{difficulty}] {title}: {desc}")
+            if isinstance(q, str):
+                lines.append(f"- {q}")
+            elif isinstance(q, dict):
+                title = q.get("title", "Untitled")
+                desc = q.get("description", "")
+                difficulty = q.get("difficulty", "MEDIUM")
+                lines.append(f"- [{difficulty}] {title}: {desc}")
+            else:
+                lines.append(f"- {str(q)}")
         return "\n".join(lines)
 
     @staticmethod
     def _fallback_questions(
         mock_questions: list[dict], mock_type: str, difficulty: str
     ) -> list[Question]:
-        if not mock_questions:
-            return [Question(
-                id="q1",
-                text="Tell me about your experience and what interests you about this role.",
-                difficulty=difficulty,
-                order=1,
-                speechType="question",
-            )]
+        difficulty = difficulty.upper() if difficulty else "MEDIUM"
+        mock_type = mock_type.upper() if mock_type else "TECHNICAL"
 
-        questions = []
-        for i, q in enumerate(mock_questions, 1):
-            title = q.get("title", "Question")
-            description = q.get("description", "")
-            text = f"{title}: {description}" if description else title
-            questions.append(Question(
-                id=f"q{i}",
-                text=text,
-                difficulty=q.get("difficulty", difficulty),
-                order=i,
-                speechType="question",
-            ))
-        return questions
+        if mock_questions:
+            questions = []
+            for i, q in enumerate(mock_questions, 1):
+                title = q.get("title", "Question") if isinstance(q, dict) else str(q)
+                description = q.get("description", "") if isinstance(q, dict) else ""
+                text = f"{title}: {description}" if description else title
+                q_difficulty = ((q.get("difficulty") if isinstance(q, dict) else None) or difficulty).upper()
+                questions.append(Question(
+                    id=f"q{i}",
+                    text=text,
+                    difficulty=q_difficulty,
+                    order=i,
+                    speechType="question",
+                ))
+            return questions
+
+        # Generate generic questions based on type
+        templates = {
+            "TECHNICAL": [
+                "Tell me about your experience and what interests you about this role.",
+                "Can you walk me through a challenging technical problem you've solved?",
+                "How do you approach debugging a complex issue in production?",
+                "Explain a technical concept you're passionate about as if teaching a beginner.",
+                "What trade-offs do you consider when choosing between different technologies?",
+            ],
+            "BEHAVIORAL": [
+                "Tell me about a time you had to work with a difficult team member.",
+                "Describe a situation where you had to adapt to a significant change.",
+                "How do you handle tight deadlines and competing priorities?",
+                "Can you give an example of when you took initiative beyond your role?",
+                "Tell me about a failure and what you learned from it.",
+            ],
+            "CODING": [
+                "How would you approach designing a system that needs to handle millions of requests?",
+                "Explain the difference between time complexity and space complexity with an example.",
+                "How would you optimize a slow database query?",
+                "Describe how you would implement a caching strategy.",
+                "What's your approach to writing testable code?",
+            ],
+        }
+        defaults = [
+            "Tell me about your experience and what interests you about this role.",
+            "Can you describe a challenging project you've worked on?",
+            "Where do you see yourself growing in this field?",
+            "What's something you've learned recently that excited you?",
+            "How do you stay current with developments in your field?",
+        ]
+        question_texts = templates.get(mock_type, defaults)
+
+        return [
+            Question(id=f"q{i}", text=text, difficulty=difficulty, order=i, speechType="question")
+            for i, text in enumerate(question_texts, 1)
+        ]
 
     @staticmethod
     def _fallback_intro(mock_type: str, technologies: list[str]) -> str:
+        mock_type = mock_type.upper() if mock_type else "TECHNICAL"
         tech_str = ", ".join(technologies) if technologies else "the relevant topics"
         intros = {
             "TECHNICAL": f"Hello! I'll be conducting your technical interview today focusing on {tech_str}. Let's get started.",
