@@ -16,10 +16,10 @@ You must respond with valid JSON matching this exact schema:
     "askingClarifications": <0-100>
   }},
   "overallComment": "Brief overall assessment",
-  "feedback": "1-2 sentence acknowledgement for the candidate (encouraging, concise)",
+  "feedback": "1-2 sentence brief response to the candidate. Be honest and specific. Do not praise poor or empty answers.",
   "strengths": ["strength1", "strength2"],
   "areasToImprove": ["area1", "area2"],
-  "nextAction": "follow_up" | "next_question" | "end",
+  "nextAction": "follow_up" | "next_question" | "clarify" | "end",
   "followUpQuestion": {{
     "id": "qN_f1",
     "text": "Follow-up question text",
@@ -55,15 +55,20 @@ Duration: {duration_seconds} seconds
 </candidate_content>
 
 <evaluation_guidelines>
+- CLARIFICATION REQUESTS: If the candidate's response is a request to repeat, clarify, or rephrase the question (e.g. "Can you clarify your question?", "Could you repeat that?", "What do you mean by...?"), set nextAction to "clarify". Put the rephrased question in the feedback field as a direct, friendly clarification. Do NOT score it, do NOT tell the candidate they failed — simply reask the question more clearly. Set all scores to 0, strengths/areasToImprove to empty, followUpQuestion to null.
+
 - For TECHNICAL interviews: Weight technical and problemSolving scores higher. Focus on correctness, depth, and approach.
 - For BEHAVIORAL interviews: Weight communication and structuredThinking scores higher. Focus on STAR method (Situation, Task, Action, Result), impact, and self-awareness.
 - For CODING interviews: Weight problemSolving and technical scores higher. Focus on algorithm choice, edge cases, time/space complexity, and code quality reasoning.
 
 - Set nextAction to "follow_up" if the answer was brief or superficial and could benefit from deeper exploration (max 1 follow-up per question)
-- Set nextAction to "next_question" if the answer was adequate or sufficient
+- Set nextAction to "next_question" if the answer was adequate or sufficient, OR if the candidate clearly does not know the answer and a follow-up would not help
+- Set nextAction to "clarify" ONLY when the candidate is asking you to repeat or clarify the question
 - Set nextAction to "end" only if this is the final question and the interview should conclude
 - Include followUpQuestion only when nextAction is "follow_up", otherwise set it to null
-- Keep feedback brief and encouraging — this will be read aloud to the candidate during the interview
+- Keep feedback brief (1-2 sentences) — this will be read aloud to the candidate during the interview
+- Be HONEST in feedback. Do NOT say "good" or "great" for poor, empty, or "I don't know" answers. Instead, acknowledge what happened: e.g. "You didn't address the question." or "No substantive answer was given."
+- Score "I don't know" and empty answers strictly: 0-15 across all dimensions, no strengths listed, areasToImprove should note what was missing
 </evaluation_guidelines>
 
 Evaluate the candidate's answer now as valid JSON:
