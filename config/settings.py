@@ -8,6 +8,10 @@ class Settings:
     ASSEMBLYAI_API_KEY: str = os.getenv("ASSEMBLYAI_API_KEY", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "")
+
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:3000")
     BACKEND_API_KEY: str = os.getenv("BACKEND_API_KEY", "")
 
@@ -32,8 +36,12 @@ class Settings:
         missing = []
         if not self.ASSEMBLYAI_API_KEY:
             missing.append("ASSEMBLYAI_API_KEY")
-        if not self.GEMINI_API_KEY:
+        if self.LLM_PROVIDER.lower() == "gemini" and not self.GEMINI_API_KEY:
             missing.append("GEMINI_API_KEY")
+        if self.LLM_PROVIDER.lower() == "groq" and not self.GROQ_API_KEY:
+            missing.append("GROQ_API_KEY")
+        if not self.GEMINI_API_KEY and not self.GROQ_API_KEY:
+            missing.append("GEMINI_API_KEY or GROQ_API_KEY")
         if missing:
             raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 

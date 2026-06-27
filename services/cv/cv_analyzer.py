@@ -10,7 +10,7 @@ from docx import Document
 from config import settings
 from models.cv import CvAnalyzeResponse
 from prompts import format_prompt
-from services.llm.gemini_service import GeminiService
+from services.llm.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,8 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
 
 
 class CvAnalyzer:
-    def __init__(self, gemini_service: GeminiService | None = None):
-        self._gemini = gemini_service or GeminiService()
+    def __init__(self, llm: LLMService | None = None):
+        self._llm = llm or LLMService()
 
     async def analyze(
         self,
@@ -108,7 +108,7 @@ class CvAnalyzer:
                 job_context=job_context_str,
             )
 
-            response = await self._gemini.generate_json(prompt, CvAnalyzeResponse)
+            response = await self._llm.generate_json(prompt, CvAnalyzeResponse)
 
             if response:
                 return response
