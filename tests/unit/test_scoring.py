@@ -10,14 +10,14 @@ from models.scoring import (
     VideoScores,
 )
 from services.scoring.score_aggregator import ScoreAggregator
-from services.scoring.transcript_scorer import TranscriptScorer, _EvaluateAnswerResponse
+from services.scoring.transcript_scorer import TranscriptScorer, EvaluateAnswerResponse
 
 
 class TestTranscriptScorer:
     @pytest.mark.asyncio
     async def test_score_returns_valid(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=_EvaluateAnswerResponse(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=EvaluateAnswerResponse(
             scores={
                 "communication": 75.0,
                 "problemSolving": 70.0,
@@ -32,7 +32,7 @@ class TestTranscriptScorer:
             areasToImprove=["structure"],
             nextAction="next_question",
         ))
-        scorer = TranscriptScorer(gemini_service=mock_gemini)
+        scorer = TranscriptScorer(llm=mock_llm)
         result = await scorer.score(
             question="Explain React hooks",
             transcript="React hooks let you use state...",
@@ -46,8 +46,8 @@ class TestTranscriptScorer:
 
     @pytest.mark.asyncio
     async def test_score_handles_empty_transcript(self):
-        mock_gemini = AsyncMock()
-        scorer = TranscriptScorer(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        scorer = TranscriptScorer(llm=mock_llm)
         result = await scorer.score(
             question="Explain closures",
             transcript="",
@@ -58,8 +58,8 @@ class TestTranscriptScorer:
 
     @pytest.mark.asyncio
     async def test_score_handles_whitespace_transcript(self):
-        mock_gemini = AsyncMock()
-        scorer = TranscriptScorer(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        scorer = TranscriptScorer(llm=mock_llm)
         result = await scorer.score(
             question="Explain closures",
             transcript="   ",
@@ -69,9 +69,9 @@ class TestTranscriptScorer:
 
     @pytest.mark.asyncio
     async def test_score_handles_llm_failure(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(side_effect=Exception("LLM error"))
-        scorer = TranscriptScorer(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(side_effect=Exception("LLM error"))
+        scorer = TranscriptScorer(llm=mock_llm)
         result = await scorer.score(
             question="Explain closures",
             transcript="Closures are...",
@@ -82,11 +82,11 @@ class TestTranscriptScorer:
 
     @pytest.mark.asyncio
     async def test_score_handles_partial_llm_response(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=_EvaluateAnswerResponse(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=EvaluateAnswerResponse(
             scores={"technical": 70.0},
         ))
-        scorer = TranscriptScorer(gemini_service=mock_gemini)
+        scorer = TranscriptScorer(llm=mock_llm)
         result = await scorer.score(
             question="Explain closures",
             transcript="Closures...",
@@ -154,11 +154,11 @@ class TestScoreAggregatorWeightedAverage:
 class TestScoreAggregatorLLMAdjustment:
     @pytest.mark.asyncio
     async def test_adjust_with_llm_success(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=LLMAdjustment(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=LLMAdjustment(
             adjustment=5.0, reason="Strong consistency", confidence="medium",
         ))
-        agg = ScoreAggregator(gemini_service=mock_gemini)
+        agg = ScoreAggregator(llm=mock_llm)
         result = await agg.adjust_with_llm(
             weighted_avg=72.5,
             question_results="Q1: 70, Q2: 75",
@@ -170,11 +170,11 @@ class TestScoreAggregatorLLMAdjustment:
 
     @pytest.mark.asyncio
     async def test_adjust_with_llm_clamps(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=LLMAdjustment(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=LLMAdjustment(
             adjustment=15.0, reason="Exceptional", confidence="high",
         ))
-        agg = ScoreAggregator(gemini_service=mock_gemini)
+        agg = ScoreAggregator(llm=mock_llm)
         result = await agg.adjust_with_llm(
             weighted_avg=80.0,
             question_results="Avg: 80",
@@ -185,9 +185,9 @@ class TestScoreAggregatorLLMAdjustment:
 
     @pytest.mark.asyncio
     async def test_adjust_with_llm_failure_returns_none(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(side_effect=Exception("LLM error"))
-        agg = ScoreAggregator(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(side_effect=Exception("LLM error"))
+        agg = ScoreAggregator(llm=mock_llm)
         result = await agg.adjust_with_llm(
             weighted_avg=72.5,
             question_results="Q1: 70",
