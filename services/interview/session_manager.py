@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 import time
@@ -5,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from models.interview import CheatClassification, CheatEvidence
-from models.scoring import PerformanceResult
+from models.scoring import AudioScores, PerformanceResult, TranscriptScores, VideoScores
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,8 @@ class Answer:
     score: float = 0.0
     strengths: list[str] = field(default_factory=list)
     areasToImprove: list[str] = field(default_factory=list)
+    transcriptScores: TranscriptScores | None = None
+    audioScores: AudioScores | None = None
 
 
 @dataclass
@@ -38,7 +41,7 @@ class Session:
     lastActivityAt: float = field(default_factory=time.time)
     answers: list[Answer] = field(default_factory=list)
     tabSwitches: int = 0
-    videoFrames: list[dict] = field(default_factory=list)
+    videoFrameResults: list[dict] = field(default_factory=list)
     questionsAsked: list[dict] = field(default_factory=list)
     currentQuestionIndex: int = 0
     status: str = "active"
@@ -132,12 +135,12 @@ class SessionManager:
         ))
         session.touch()
 
-    def add_video_frame(self, session_id: str, frame_data: dict) -> None:
+    def add_video_frame(self, session_id: str, frame_result: dict) -> None:
         session = self._get_active_session(session_id)
         if session is None:
             logger.warning("Video frame for expired/unknown session %s", session_id)
             return
-        session.videoFrames.append(frame_data)
+        session.videoFrameResults.append(frame_result)
         session.touch()
 
     def add_tab_switch(self, session_id: str, count: int) -> None:
@@ -170,51 +173,153 @@ class SessionManager:
         session.touch()
 
         if self._backend_client:
-            try:
-                await self._backend_client.create_question(
-                    session.candidateId,
-                    data={
-                        "question": question_id,
-                        "answer": next(
-                            (a.transcript for a in session.answers if a.questionId == question_id), ""
-                        ),
-                        "aiFeedback": ai_feedback,
-                        "score": score,
-                        "strengths": strengths or [],
-                        "areasToImprove": areas_to_improve or [],
-                        "durationInMinutes": round(
-                            next(
-                                (a.durationSeconds for a in session.answers if a.questionId == question_id), 0
-                            ) / 60, 2
-                        ),
-                    },
-                    idempotency_key=f"{session_id}-{question_id}-1",
-                )
-            except Exception as e:
-                logger.warning("Failed to persist question to backend: %s", e)
+            answer_transcript = next(
+                (a.transcript for a in session.answers if a.questionId == question_id), ""
+            )
+            answer_duration = next(
+                (a.durationSeconds for a in session.answers if a.questionId == question_id), 0
+            )
+            asyncio.create_task(self._persist_question(
+                candidate_id=session.candidateId,
+                question_id=question_id,
+                ai_feedback=ai_feedback,
+                score=score,
+                strengths=strengths or [],
+                areas_to_improve=areas_to_improve or [],
+                duration_minutes=round(answer_duration / 60, 2),
+                answer=answer_transcript,
+                idempotency_key=f"{session_id}-{question_id}-1",
+            ))
+
+    async def _persist_question(
+        self,
+        candidate_id: str,
+        question_id: str,
+        ai_feedback: str,
+        score: float,
+        strengths: list[str],
+        areas_to_improve: list[str],
+        duration_minutes: float,
+        answer: str,
+        idempotency_key: str,
+    ) -> None:
+        try:
+            await self._backend_client.create_question(
+                candidate_id,
+                data={
+                    "question": question_id,
+                    "answer": answer,
+                    "aiFeedback": ai_feedback,
+                    "score": score,
+                    "strengths": strengths,
+                    "areasToImprove": areas_to_improve,
+                    "durationInMinutes": duration_minutes,
+                },
+                idempotency_key=idempotency_key,
+            )
+        except Exception as e:
+            logger.warning("Failed to persist question to backend: %s", e)
 
     async def end_session(self, session_id: str) -> PerformanceResult:
         session = self._sessions.get(session_id)
         if session is None:
             raise ValueError(f"Session {session_id} not found")
         session.status = "completed"
-        cheat_evidence = CheatEvidence(
-            tabSwitches=session.tabSwitches,
+
+        from services.interview.cheat_detector import CheatDetector
+        from services.scoring.audio_scorer import AudioScorer
+        from services.scoring.score_aggregator import ScoreAggregator
+        from services.scoring.video_scorer import VideoScorer
+
+        cheat_detector = CheatDetector()
+        audio_scorer = AudioScorer()
+        video_scorer = VideoScorer()
+        score_aggregator = ScoreAggregator()
+
+        scored_answers = [a for a in session.answers if a.aiFeedback]
+
+        transcript_scores_list = [a.transcriptScores for a in scored_answers if a.transcriptScores is not None]
+        if transcript_scores_list:
+            avg_transcript = TranscriptScores(
+                communication=sum(s.communication for s in transcript_scores_list) / len(transcript_scores_list),
+                problemSolving=sum(s.problemSolving for s in transcript_scores_list) / len(transcript_scores_list),
+                technical=sum(s.technical for s in transcript_scores_list) / len(transcript_scores_list),
+                clarityOfExplanation=sum(s.clarityOfExplanation for s in transcript_scores_list) / len(transcript_scores_list),
+                structuredThinking=sum(s.structuredThinking for s in transcript_scores_list) / len(transcript_scores_list),
+                askingClarifications=sum(s.askingClarifications for s in transcript_scores_list) / len(transcript_scores_list),
+            )
+        else:
+            avg_transcript = TranscriptScores()
+
+        total_words = sum(len(a.transcript.split()) for a in scored_answers if a.transcript)
+        total_duration = sum(a.durationSeconds for a in scored_answers)
+        total_fillers = sum(
+            AudioScorer.count_fillers(a.transcript) for a in scored_answers if a.transcript
         )
-        cheat = CheatClassification(
-            level=self._classify_cheat(session.tabSwitches),
-            evidence=cheat_evidence,
+        audio_scores = audio_scorer.score(
+            word_count=total_words,
+            duration_seconds=total_duration,
+            filler_count=total_fillers,
         )
-        total_score = 0.0
-        if session.answers:
-            scored = [a for a in session.answers if a.aiFeedback]
-            if scored:
-                total_score = sum(a.score for a in scored) / len(scored)
+
+        video_frame_results = session.videoFrameResults
+        from services.scoring.video_scorer import VideoFrameResult
+        parsed_frames = []
+        for fr in video_frame_results:
+            parsed_frames.append(VideoFrameResult(
+                face_detected=fr.get("face_detected", False),
+                num_faces=fr.get("num_faces", 0),
+                eye_contact=fr.get("eye_contact"),
+                gaze_horizontal=fr.get("gaze_horizontal"),
+            ))
+
+        video_scores = video_scorer.compute_session_scores(parsed_frames)
+        cheat_metrics = video_scorer.compute_cheat_metrics(parsed_frames)
+
+        cheat = cheat_detector.classify(
+            tab_count=session.tabSwitches,
+            no_face_pct=cheat_metrics.get("noFacePct"),
+            multiple_face_pct=cheat_metrics.get("multipleFacePct"),
+            gaze_away_pct=cheat_metrics.get("gazeAwayPct"),
+        )
+
+        weighted_avg = score_aggregator.compute_weighted_average(avg_transcript, audio_scores, video_scores)
+
+        question_results = "\n".join(
+            f"Q{i+1} ({a.questionId}): score={a.score:.1f}, feedback={a.aiFeedback}"
+            for i, a in enumerate(scored_answers)
+        )
+
+        llm_adjustment = None
+        try:
+            llm_adjustment = await score_aggregator.adjust_with_llm(
+                weighted_avg=weighted_avg,
+                question_results=question_results,
+                mock_type=session.mockData.get("type", "TECHNICAL"),
+                duration_minutes=round(total_duration / 60) if total_duration > 0 else 30,
+                questions_answered=len(scored_answers),
+            )
+        except Exception as e:
+            logger.warning("LLM adjustment failed: %s", e)
+
+        final_score = score_aggregator.compute_performance(avg_transcript, audio_scores, video_scores, llm_adjustment)
+
         result = PerformanceResult(
-            score=total_score,
+            score=final_score,
+            communication=avg_transcript.communication,
+            problemSolving=avg_transcript.problemSolving,
+            technical=avg_transcript.technical,
+            clarityOfExplanation=avg_transcript.clarityOfExplanation,
+            structuredThinking=avg_transcript.structuredThinking,
+            askingClarifications=avg_transcript.askingClarifications,
+            confidence=audio_scores.confidence,
+            speaking=audio_scores.speaking,
+            eyeContact=video_scores.eyeContact,
             cheat=cheat,
+            llmAdjustment=llm_adjustment,
         )
-        logger.info("Ended session %s, score=%.1f, cheat=%s", session_id, total_score, cheat.level)
+
+        logger.info("Ended session %s, score=%.1f, cheat=%s", session_id, final_score, cheat.level)
 
         if self._backend_client:
             try:
@@ -261,11 +366,3 @@ class SessionManager:
         for sid in expired:
             self._remove_session(sid)
             logger.info("Cleaned up expired session %s", sid)
-
-    @staticmethod
-    def _classify_cheat(tab_switches: int) -> str:
-        if tab_switches >= 6:
-            return "Critical"
-        if tab_switches >= 3:
-            return "Flagged"
-        return "Clean"

@@ -9,6 +9,7 @@ class StartSessionRequest(BaseModel):
     mockId: str
     candidateId: str
     cvUrl: str
+    mockData: Optional[dict] = None
 
 
 class Question(BaseModel):

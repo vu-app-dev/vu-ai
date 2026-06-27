@@ -8,6 +8,18 @@ PERSONA_DELIMITER_OPEN = "<candidate_content>"
 PERSONA_DELIMITER_CLOSE = "</candidate_content>"
 
 
+def _normalize_str_list(items: list) -> list[str]:
+    result = []
+    for item in items:
+        if isinstance(item, str):
+            result.append(item)
+        elif isinstance(item, dict):
+            result.append(item.get("title", item.get("name", item.get("text", str(item)))))
+        else:
+            result.append(str(item))
+    return result
+
+
 def format_prompt(template_name: str, **kwargs) -> str:
     if "mock_type" in kwargs:
         mock_type = kwargs["mock_type"]
@@ -17,13 +29,13 @@ def format_prompt(template_name: str, **kwargs) -> str:
         kwargs["mock_type"] = mock_type
 
     if "cv_skills" in kwargs and isinstance(kwargs["cv_skills"], list):
-        kwargs["cv_skills"] = ", ".join(kwargs["cv_skills"])
+        kwargs["cv_skills"] = ", ".join(_normalize_str_list(kwargs["cv_skills"]))
 
     if "technologies" in kwargs and isinstance(kwargs["technologies"], list):
-        kwargs["technologies"] = ", ".join(kwargs["technologies"])
+        kwargs["technologies"] = ", ".join(_normalize_str_list(kwargs["technologies"]))
 
     if "topics" in kwargs and isinstance(kwargs["topics"], list):
-        kwargs["topics"] = ", ".join(kwargs["topics"])
+        kwargs["topics"] = ", ".join(_normalize_str_list(kwargs["topics"]))
 
     if "existing_questions" not in kwargs:
         kwargs["existing_questions"] = "None yet — this is the first set."
