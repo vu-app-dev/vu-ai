@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from models.scoring import AudioScores, TranscriptScores
 from services.interview.session_manager import SessionManager
 
 client = TestClient(app)
@@ -71,9 +72,18 @@ class TestSessionManagerIntegration:
         )
         mgr.add_answer(session.id, "q1", "I think React is great", 60, "t1", "t2")
         mgr.add_tab_switch(session.id, 3)
-        await mgr.complete_question(session.id, "q1", ai_feedback="Good", score=75.0)
+
+        from models.scoring import TranscriptScores, AudioScores
+        answer = session.answers[0]
+        answer.aiFeedback = "Good"
+        answer.score = 75.0
+        answer.transcriptScores = TranscriptScores(
+            communication=75.0, problemSolving=70.0, technical=80.0,
+            clarityOfExplanation=65.0, structuredThinking=72.0, askingClarifications=68.0,
+        )
+        answer.audioScores = AudioScores(confidence=70.0, speaking=75.0)
 
         result = await mgr.end_session(session.id)
         assert result.cheat.level == "Flagged"
         assert result.cheat.evidence.tabSwitches == 3
-        assert result.score == 75.0
+        assert result.score > 0

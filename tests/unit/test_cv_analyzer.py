@@ -49,33 +49,29 @@ class TestExtractPdf:
 
 
 class TestAnalyzeUnsupported:
-    def test_unsupported_file_type_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_unsupported_file_type_returns_none(self):
         analyzer = CvAnalyzer()
-        import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
-            analyzer.analyze("https://example.com/resume.txt")
-        )
+        result = await analyzer.analyze("https://example.com/resume.txt")
         assert result is None
 
-    def test_empty_url_extension(self):
+    @pytest.mark.asyncio
+    async def test_empty_url_extension(self):
         analyzer = CvAnalyzer()
-        import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
-            analyzer.analyze("https://example.com/file")
-        )
+        result = await analyzer.analyze("https://example.com/file")
         assert result is None
 
 
 class TestAnalyzeWithLLM:
     @pytest.mark.asyncio
     async def test_analyze_cv_llm_success(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=CvAnalyzeResponse(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=CvAnalyzeResponse(
             skills=["Python", "React", "Node.js"],
             summary="Experienced full-stack developer with 5 years of experience.",
             score=82.0,
         ))
-        analyzer = CvAnalyzer(gemini_service=mock_gemini)
+        analyzer = CvAnalyzer(llm=mock_llm)
         mock_content = b"dummy pdf content"
 
         with patch.object(analyzer, "_download", new_callable=AsyncMock) as mock_dl, \
@@ -91,9 +87,9 @@ class TestAnalyzeWithLLM:
 
     @pytest.mark.asyncio
     async def test_analyze_cv_llm_failure_returns_null_scores(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(side_effect=Exception("LLM error"))
-        analyzer = CvAnalyzer(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(side_effect=Exception("LLM error"))
+        analyzer = CvAnalyzer(llm=mock_llm)
 
         with patch.object(analyzer, "_download", new_callable=AsyncMock) as mock_dl, \
              patch.object(analyzer, "_extract_text", return_value="John Doe, Software Engineer"):
@@ -111,8 +107,8 @@ class TestAnalyzeWithLLM:
 
     @pytest.mark.asyncio
     async def test_analyze_cv_empty_extraction(self):
-        mock_gemini = AsyncMock()
-        analyzer = CvAnalyzer(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        analyzer = CvAnalyzer(llm=mock_llm)
 
         with patch.object(analyzer, "_download", new_callable=AsyncMock, return_value=b"content"), \
              patch.object(analyzer, "_extract_text", return_value="   "):

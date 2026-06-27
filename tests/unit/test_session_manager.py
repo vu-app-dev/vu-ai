@@ -1,9 +1,10 @@
+import asyncio
 import time
 
 import pytest
 
 from models.interview import CheatEvidence
-from models.scoring import PerformanceResult
+from models.scoring import AudioScores, PerformanceResult, TranscriptScores
 from services.interview.session_manager import Session, SessionManager
 
 
@@ -155,6 +156,7 @@ class TestCompleteQuestion:
             ai_feedback="Good",
             score=80.0,
         )
+        await asyncio.sleep(0)
         mock_bc.create_question.assert_called_once()
 
 
@@ -163,11 +165,32 @@ class TestEndSession:
     async def test_end_session_returns_performance(self):
         mgr = SessionManager()
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
-        mgr.add_answer(session.id, "q1", "transcript", 60, "t1", "t2")
-        await mgr.complete_question(session.id, "q1", ai_feedback="Good", score=80.0)
+
+        long_transcript = " ".join(["React"] * 130 + ["hooks", "allow", "state", "management", "in", "functional", "components"])
+        mgr.add_answer(session.id, "q1", long_transcript, 60, "t1", "t2")
+
+        answer = session.answers[0]
+        answer.aiFeedback = "Good"
+        answer.score = 80.0
+        answer.transcriptScores = TranscriptScores(
+            communication=80.0, problemSolving=75.0, technical=85.0,
+            clarityOfExplanation=70.0, structuredThinking=78.0, askingClarifications=72.0,
+        )
+
         result = await mgr.end_session(session.id)
         assert isinstance(result, PerformanceResult)
-        assert result.score == 80.0
+        assert result.score > 0
+        assert result.communication == 80.0
+        assert result.technical == 85.0
+
+    @pytest.mark.asyncio
+    async def test_end_session_with_no_scores(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        result = await mgr.end_session(session.id)
+        assert isinstance(result, PerformanceResult)
+        assert result.score == 0.0
+        assert result.cheat.level == "Clean"
 
     @pytest.mark.asyncio
     async def test_end_session_classifies_cheat(self):

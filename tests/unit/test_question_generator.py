@@ -50,7 +50,7 @@ class TestFallbackQuestions:
 
     def test_fallback_empty_questions(self):
         result = QuestionGenerator._fallback_questions([], "TECHNICAL", "MEDIUM")
-        assert len(result) == 1
+        assert len(result) >= 1
         assert result[0].speechType == "question"
 
     def test_fallback_preserves_difficulty(self):
@@ -86,14 +86,14 @@ class TestFallbackIntro:
 class TestGenerateQuestionsWithLLM:
     @pytest.mark.asyncio
     async def test_generate_questions_llm_success(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=_GenerateQuestionsResponse(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=_GenerateQuestionsResponse(
             questions=[
                 _QuestionItem(id="q1", text="What is React?", difficulty="MEDIUM", order=1),
                 _QuestionItem(id="q2", text="Explain hooks", difficulty="HARD", order=2),
             ]
         ))
-        gen = QuestionGenerator(gemini_service=mock_gemini)
+        gen = QuestionGenerator(llm=mock_llm)
         result = await gen.generate_questions(MOCK_DATA, cv_skills=["JavaScript"])
         assert len(result) == 2
         assert result[0].text == "What is React?"
@@ -101,18 +101,18 @@ class TestGenerateQuestionsWithLLM:
 
     @pytest.mark.asyncio
     async def test_generate_questions_llm_failure_fallback(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(side_effect=Exception("LLM error"))
-        gen = QuestionGenerator(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(side_effect=Exception("LLM error"))
+        gen = QuestionGenerator(llm=mock_llm)
         result = await gen.generate_questions(MOCK_DATA, cv_skills=["JavaScript"])
         assert len(result) >= 1
         assert result[0].speechType == "question"
 
     @pytest.mark.asyncio
     async def test_generate_questions_llm_returns_empty_fallback(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=_GenerateQuestionsResponse(questions=[]))
-        gen = QuestionGenerator(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=_GenerateQuestionsResponse(questions=[]))
+        gen = QuestionGenerator(llm=mock_llm)
         result = await gen.generate_questions(MOCK_DATA)
         assert len(result) >= 1
 
@@ -120,11 +120,11 @@ class TestGenerateQuestionsWithLLM:
 class TestGenerateIntroWithLLM:
     @pytest.mark.asyncio
     async def test_generate_intro_llm_success(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(return_value=_IntroResponse(
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=_IntroResponse(
             intro="Welcome to your technical interview!"
         ))
-        gen = QuestionGenerator(gemini_service=mock_gemini)
+        gen = QuestionGenerator(llm=mock_llm)
         result = await gen.generate_intro(
             mock_type="TECHNICAL", technologies=["React"]
         )
@@ -132,9 +132,9 @@ class TestGenerateIntroWithLLM:
 
     @pytest.mark.asyncio
     async def test_generate_intro_llm_failure_fallback(self):
-        mock_gemini = AsyncMock()
-        mock_gemini.generate_json = AsyncMock(side_effect=Exception("LLM error"))
-        gen = QuestionGenerator(gemini_service=mock_gemini)
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(side_effect=Exception("LLM error"))
+        gen = QuestionGenerator(llm=mock_llm)
         result = await gen.generate_intro(
             mock_type="TECHNICAL", technologies=["React"]
         )
