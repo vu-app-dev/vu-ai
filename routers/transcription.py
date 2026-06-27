@@ -1,104 +1,124 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 import asyncio
-import tempfile
+import logging
 import os
+import tempfile
+from typing import Optional
 
-from services import STT, RealtimeSTT
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+
+from config import settings
+from services.stt.stt_service import STT
+from services.stt.stt_realtime import RealtimeSTT, ASSEMBLYAI_AVAILABLE
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/stt", tags=["Speech-to-Text"])
 
+
 @router.post("/transcribe/url")
 async def transcribe_url(url: str):
-    """
-    Transcribe audio from a URL.
-    
-    Example: POST /api/stt/transcribe/url?url=https://example.com/audio.mp3
-    """
+    """Transcribe audio from a URL."""
     try:
         stt = STT()
         result = stt.transcribe(url)
         return {
             "text": result.text,
             "words": result.words,
-            "duration": result.duration
+            "duration": result.duration,
         }
     except Exception as e:
+        logger.error("[STT URL] Transcription failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/transcribe/file")
 async def transcribe_file(file: UploadFile = File(...)):
-    """
-    Transcribe an uploaded audio file.
-    
-    Example: POST /api/stt/transcribe/file with file in form data
-    """
+    """Transcribe an uploaded audio file."""
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
-        
+
         stt = STT()
         result = stt.transcribe(tmp_path)
-        
-        os.unlink(tmp_path)
-        
         return {
             "text": result.text,
             "words": result.words,
-            "duration": result.duration
+            "duration": result.duration,
         }
     except Exception as e:
+        logger.error("[STT File] Transcription failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 @router.websocket("/realtime")
 async def websocket_realtime(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time transcription.
-    
-    Connect: ws://localhost:8000/api/stt/realtime
-    Send: {"audio": "<base64 encoded audio>"}
-    Receive: {"type": "partial|final", "text": "..."}
-    """
+    """Real-time STT WebSocket using AssemblyAI Universal Streaming v3.
 
+    Protocol:
+    - Client connects
+    - Client sends: {"audio": "<base64 PCM 16kHz mono>"}
+    - Client sends: {"type": "end_stream"} to signal end of audio
+    - Server sends: {"type": "session_begins", "session_id": "..."}
+    - Server sends: {"type": "partial", "text": "..."}
+    - Server sends: {"type": "final", "text": "..."}
+    - Server sends: {"type": "error", "message": "..."} on errors
+    """
     await websocket.accept()
-    print("[WebSocket] Client connected")
-    
-    realtime_stt = RealtimeSTT()
-    
+    logger.info("[STT WS] Client connected")
+
+    if not ASSEMBLYAI_AVAILABLE:
+        await websocket.send_json({"type": "error", "message": "AssemblyAI streaming not available"})
+        await websocket.close()
+        return
+
+    stt: Optional[RealtimeSTT] = None
+
     try:
         loop = asyncio.get_event_loop()
-        transcript_queue = realtime_stt.connect(loop)
-        print("[WebSocket] Connected to AssemblyAI")
-        
+        stt = RealtimeSTT()
+        transcript_queue = stt.connect(loop)
+        logger.info("[STT WS] AssemblyAI session connected")
+
         async def send_transcripts():
-            """Continuously check queue and send to browser"""
             while True:
                 try:
-                    data = await asyncio.wait_for(
-                        transcript_queue.get(), 
-                        timeout=0.1
-                    )
+                    data = await asyncio.wait_for(transcript_queue.get(), timeout=0.1)
                     await websocket.send_json(data)
                 except asyncio.TimeoutError:
                     continue
                 except Exception:
                     break
-        
+
         send_task = asyncio.create_task(send_transcripts())
-        
-        while True:
-            data = await websocket.receive_json()
-            if "audio" in data:
-                realtime_stt.stream(data["audio"])
-    
-    except WebSocketDisconnect:
-        print("[WebSocket] Client disconnected")
+
+        try:
+            while True:
+                data = await websocket.receive_json()
+                if "audio" in data:
+                    stt.stream(data["audio"])
+                elif data.get("type") == "end_stream":
+                    stt.close()
+                    await asyncio.sleep(0.5)
+                    break
+        except WebSocketDisconnect:
+            logger.info("[STT WS] Client disconnected")
+
     except Exception as e:
-        print(f"[WebSocket] Error: {e}")
+        logger.error("[STT WS] Error: %s", e)
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
     finally:
-        realtime_stt.close()
-        print("[WebSocket] Cleanup complete")
-        
+        if stt:
+            stt.close()
+        logger.info("[STT WS] Cleanup complete")
