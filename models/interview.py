@@ -36,7 +36,9 @@ class StartSessionResponse(BaseModel):
     sessionId: str
     sessionToken: str
     intro: str
+    introAudio: Optional[str] = None
     firstQuestion: Question
+    firstQuestionAudio: Optional[str] = None
     cvAnalysis: Optional[dict] = None
 
 
@@ -75,6 +77,7 @@ class WSIntroMessage(WSMessage):
     type: Literal["intro"] = "intro"
     text: str
     speechType: Literal["intro"] = "intro"
+    audioBase64: Optional[str] = None
 
 
 class WSQuestionMessage(WSMessage):
@@ -84,12 +87,14 @@ class WSQuestionMessage(WSMessage):
     difficulty: Literal["EASY", "MEDIUM", "HARD"]
     order: int
     speechType: Literal["question", "follow_up"] = "question"
+    audioBase64: Optional[str] = None
 
 
 class WSAcknowledgementMessage(WSMessage):
     type: Literal["acknowledgement"] = "acknowledgement"
     text: str
     speechType: Literal["feedback"] = "feedback"
+    audioBase64: Optional[str] = None
 
 
 class WSCheatWarningMessage(WSMessage):

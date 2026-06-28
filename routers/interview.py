@@ -26,6 +26,7 @@ from services.scoring.audio_scorer import AudioScorer
 from services.scoring.score_aggregator import ScoreAggregator
 from services.scoring.transcript_scorer import TranscriptScorer, EvaluateAnswerResponse
 from services.video.face_analyzer import FaceAnalyzer
+from services.tts.tts_service import TTSService
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ MAX_FOLLOWUPS_TOTAL = 3
 session_manager = SessionManager(backend_client=backend_client)
 cheat_detector = CheatDetector()
 face_analyzer = FaceAnalyzer()
+tts_service = TTSService()
 
 
 def _question_dict(q_data) -> dict:
@@ -60,6 +62,13 @@ def _get_transcript_scorer() -> TranscriptScorer:
 
 def _get_score_aggregator() -> ScoreAggregator:
     return ScoreAggregator()
+
+
+async def _tts(text: str) -> Optional[str]:
+    """Generate base64 MP3 audio for *text*. Returns None if TTS unavailable."""
+    if not text:
+        return None
+    return await tts_service.synthesize(text)
 
 
 FALLBACK_MOCK_DATA = {
@@ -143,11 +152,18 @@ async def start_session(request: StartSessionRequest):
     )
     session.questionsAsked = [q.model_dump() for q in questions]
 
+    # Generate TTS audio for intro + first question concurrently
+    intro_audio, first_q_audio = await tts_service.synthesize_many(
+        [intro_text, first_question.text]
+    )
+
     return StartSessionResponse(
         sessionId=session.id,
         sessionToken=session.token,
         intro=intro_text,
+        introAudio=intro_audio,
         firstQuestion=first_question,
+        firstQuestionAudio=first_q_audio,
         cvAnalysis=None,
     )
 
@@ -328,10 +344,15 @@ async def _handle_answer(
         follow_up = None
 
     if next_action == "clarify":
+        clarification_audio, clarify_q_audio = await tts_service.synthesize_many(
+            [feedback_text, feedback_text]
+        )
+
         clarification = WSAcknowledgementMessage(
             sessionId=session_id,
             text=feedback_text,
             speechType="feedback",
+            audioBase64=clarification_audio,
         )
         await websocket.send_json(clarification.model_dump())
 
@@ -349,6 +370,7 @@ async def _handle_answer(
             difficulty=clarified_q.difficulty,
             order=clarified_q.order,
             speechType="question",
+            audioBase64=clarify_q_audio,
         )
         await websocket.send_json(clarify_msg.model_dump())
         return False
@@ -370,6 +392,7 @@ async def _handle_answer(
         sessionId=session_id,
         text=feedback_text,
         speechType="feedback",
+        audioBase64=await _tts(feedback_text),
     )
     await websocket.send_json(acknowledgement.model_dump())
 
@@ -401,6 +424,7 @@ async def _handle_answer(
                     difficulty=follow_up_question.difficulty,
                     order=follow_up_question.order,
                     speechType="follow_up",
+                    audioBase64=await _tts(follow_up_question.text),
                 )
                 await websocket.send_json(question_msg.model_dump())
                 return False
@@ -421,6 +445,7 @@ async def _handle_answer(
             difficulty=nq.difficulty,
             order=nq.order,
             speechType=nq.speechType,
+            audioBase64=await _tts(nq.text),
         )
         await websocket.send_json(next_question_msg.model_dump())
     else:
