@@ -54,14 +54,16 @@ class TTSService:
             text = text[:4500]
 
         try:
-            communicate = edge_tts.Communicate(
-                text=text,
-                voice=self._voice,
-                rate=self._rate or None,
-                volume=self._volume or None,
-                pitch=self._pitch or None,
-                proxy=self._proxy or None,
-            )
+            kwargs = {"text": text, "voice": self._voice}
+            if self._rate:
+                kwargs["rate"] = self._rate
+            if self._volume:
+                kwargs["volume"] = self._volume
+            if self._pitch:
+                kwargs["pitch"] = self._pitch
+            if self._proxy:
+                kwargs["proxy"] = self._proxy
+            communicate = edge_tts.Communicate(**kwargs)
             buf = io.BytesIO()
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
