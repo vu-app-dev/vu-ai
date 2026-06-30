@@ -55,7 +55,7 @@ class QuestionGenerator:
         estimated_time = mock_data.get("estimatedTimeInMinutes", 30)
 
         try:
-            num_questions = max(3, min(8, estimated_time // 5))
+            num_questions = max(5, min(10, estimated_time // 3))
             existing = self._format_existing_questions(mock_questions)
 
             prompt = format_prompt(
