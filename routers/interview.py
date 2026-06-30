@@ -344,17 +344,7 @@ async def _handle_answer(
         follow_up = None
 
     if next_action == "clarify":
-        clarification_audio, clarify_q_audio = await tts_service.synthesize_many(
-            [feedback_text, feedback_text]
-        )
-
-        clarification = WSAcknowledgementMessage(
-            sessionId=session_id,
-            text=feedback_text,
-            speechType="feedback",
-            audioBase64=clarification_audio,
-        )
-        await websocket.send_json(clarification.model_dump())
+        clarify_q_audio = await _tts(feedback_text)
 
         clarified_q = Question(
             id=f"{question_id}_c1",
