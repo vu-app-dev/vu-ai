@@ -23,14 +23,12 @@ class Settings:
     SAMPLE_RATE: int = 16000
     LANGUAGE: str = "en"
 
-    # TTS
-    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "google")
-    GOOGLE_TTS_API_KEY: str = os.getenv("GOOGLE_TTS_API_KEY", "")
-    TTS_VOICE_LANGUAGE: str = os.getenv("TTS_VOICE_LANGUAGE", "en-US")
-    TTS_VOICE_NAME: str = os.getenv("TTS_VOICE_NAME", "en-US-NeuralVoice-C")
-    TTS_SPEAKING_RATE: float = float(os.getenv("TTS_SPEAKING_RATE", "1.0"))
-    TTS_PITCH: float = float(os.getenv("TTS_PITCH", "0.0"))
-    TTS_TIMEOUT_SECONDS: float = float(os.getenv("TTS_TIMEOUT_SECONDS", "10.0"))
+    # TTS (edge-tts — Microsoft neural voices, no API key needed)
+    TTS_VOICE: str = os.getenv("TTS_VOICE", "en-US-AriaNeural")
+    TTS_RATE: str = os.getenv("TTS_RATE", "")
+    TTS_VOLUME: str = os.getenv("TTS_VOLUME", "")
+    TTS_PITCH: str = os.getenv("TTS_PITCH", "")
+    TTS_PROXY: str = os.getenv("TTS_PROXY", "")
 
     SESSION_TIMEOUT_SECONDS: int = int(os.getenv("SESSION_TIMEOUT_SECONDS", "120"))
     LLM_MAX_RETRIES: int = 3

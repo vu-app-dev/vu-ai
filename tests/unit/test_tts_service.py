@@ -1,114 +1,102 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
+import io
 
 from services.tts.tts_service import TTSService
 
 
 class TestTTSServiceAvailability:
-    def test_unavailable_without_api_key(self):
-        svc = TTSService(api_key="")
-        assert svc.available is False
-
-    def test_available_with_api_key(self):
-        svc = TTSService(api_key="fake-key")
+    def test_available_when_edge_tts_installed(self):
+        svc = TTSService()
         assert svc.available is True
 
 
 class TestTTSServiceSynthesize:
     @pytest.mark.asyncio
-    async def test_returns_none_when_unavailable(self):
-        svc = TTSService(api_key="")
-        result = await svc.synthesize("Hello world")
-        assert result is None
-
-    @pytest.mark.asyncio
     async def test_returns_none_for_empty_text(self):
-        svc = TTSService(api_key="fake-key")
+        svc = TTSService()
         result = await svc.synthesize("")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_none_for_none_text(self):
-        svc = TTSService(api_key="fake-key")
+        svc = TTSService()
         result = await svc.synthesize(None)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_base64_audio_on_success(self):
-        svc = TTSService(api_key="fake-key")
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"audioContent": "dGVzdA=="}
-        mock_response.raise_for_status = MagicMock()
+        svc = TTSService(voice="en-US-AriaNeural")
 
-        with patch.object(svc._client, "post", new_callable=AsyncMock, return_value=mock_response):
+        fake_audio_chunks = [
+            {"type": "audio", "data": b"\xff\xfb" + b"fake_audio" * 100},
+            {"type": "audio", "data": b"_more_data_"},
+        ]
+
+        mock_communicate = MagicMock()
+        async def fake_stream():
+            for chunk in fake_audio_chunks:
+                yield chunk
+        mock_communicate.stream = fake_stream
+
+        with patch("services.tts.tts_service.edge_tts.Communicate", return_value=mock_communicate):
             result = await svc.synthesize("Hello interview!")
-        assert result == "dGVzdA=="
+        assert result is not None
+        import base64
+        decoded = base64.b64decode(result)
+        assert b"fake_audio" in decoded
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_empty_audio_content(self):
-        svc = TTSService(api_key="fake-key")
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"audioContent": ""}
-        mock_response.raise_for_status = MagicMock()
+    async def test_returns_none_on_empty_audio(self):
+        svc = TTSService()
 
-        with patch.object(svc._client, "post", new_callable=AsyncMock, return_value=mock_response):
+        mock_communicate = MagicMock()
+        async def fake_stream():
+            yield {"type": "metadata", "data": {}}
+        mock_communicate.stream = fake_stream
+
+        with patch("services.tts.tts_service.edge_tts.Communicate", return_value=mock_communicate):
             result = await svc.synthesize("Hello")
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_http_error(self):
-        import httpx
-        svc = TTSService(api_key="fake-key")
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Bad Request", request=MagicMock(), response=MagicMock(status_code=400, text="error")
-        )
+    async def test_returns_none_on_exception(self):
+        svc = TTSService()
 
-        with patch.object(svc._client, "post", new_callable=AsyncMock, return_value=mock_response):
-            result = await svc.synthesize("Hello")
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_timeout(self):
-        import httpx
-        svc = TTSService(api_key="fake-key")
-
-        with patch.object(svc._client, "post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("timeout")):
+        with patch("services.tts.tts_service.edge_tts.Communicate", side_effect=Exception("Network error")):
             result = await svc.synthesize("Hello")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_truncates_oversized_text(self):
-        svc = TTSService(api_key="fake-key")
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"audioContent": "dGVzdA=="}
-        mock_response.raise_for_status = MagicMock()
+        svc = TTSService()
+
+        mock_communicate = MagicMock()
+        async def fake_stream():
+            yield {"type": "audio", "data": b"audio_bytes"}
+        mock_communicate.stream = fake_stream
 
         long_text = "x" * 5000
-        with patch.object(svc._client, "post", new_callable=AsyncMock, return_value=mock_response) as mock_post:
+        with patch("services.tts.tts_service.edge_tts.Communicate", return_value=mock_communicate) as mock_ctor:
             await svc.synthesize(long_text)
-            sent_text = mock_post.call_args[1]["json"]["input"]["text"]
+            sent_text = mock_ctor.call_args[1]["text"]
             assert len(sent_text) <= 4500
 
 
 class TestTTSServiceSynthesizeMany:
     @pytest.mark.asyncio
-    async def test_returns_none_list_when_unavailable(self):
-        svc = TTSService(api_key="")
-        result = await svc.synthesize_many(["a", "b", "c"])
-        assert result == [None, None, None]
-
-    @pytest.mark.asyncio
     async def test_concurrent_synthesize(self):
-        svc = TTSService(api_key="fake-key")
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"audioContent": "dGVzdA=="}
-        mock_response.raise_for_status = MagicMock()
+        svc = TTSService()
 
-        with patch.object(svc._client, "post", new_callable=AsyncMock, return_value=mock_response):
+        mock_communicate = MagicMock()
+        async def fake_stream():
+            yield {"type": "audio", "data": b"audio"}
+        mock_communicate.stream = fake_stream
+
+        with patch("services.tts.tts_service.edge_tts.Communicate", return_value=mock_communicate):
             result = await svc.synthesize_many(["hello", "world"])
         assert len(result) == 2
-        assert all(r == "dGVzdA==" for r in result)
+        assert all(r is not None for r in result)
 
 
 class TestFormatAudioDataUri:
