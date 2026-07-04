@@ -16,6 +16,7 @@ class Settings:
     BACKEND_API_KEY: str = os.getenv("BACKEND_API_KEY", "")
 
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
 
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
