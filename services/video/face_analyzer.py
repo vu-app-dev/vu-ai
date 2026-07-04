@@ -3,10 +3,9 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
-import numpy as np
-
 try:
+    import cv2
+    import numpy as np
     import mediapipe as mp
     from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions, RunningMode
     from mediapipe.tasks.python.core.base_options import BaseOptions
@@ -14,6 +13,8 @@ try:
 except ImportError:
     HAS_MEDIAPIPE = False
     mp = None
+    cv2 = None
+    np = None
 
 logger = logging.getLogger(__name__)
 
