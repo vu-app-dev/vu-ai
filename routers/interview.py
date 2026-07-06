@@ -500,6 +500,7 @@ async def _handle_answer(
         score=question_score,
         strengths=strengths,
         areas_to_improve=areas_to_improve,
+        question_text=question_text,
     )
 
     current_answer = next((a for a in session.answers if a.questionId == question_id), None)

@@ -260,6 +260,7 @@ class SessionManager:
         score: float,
         strengths: list[str] | None = None,
         areas_to_improve: list[str] | None = None,
+        question_text: str = "",
     ) -> None:
         session = self._get_active_session(session_id)
         if session is None:
@@ -282,7 +283,7 @@ class SessionManager:
             )
             asyncio.create_task(self._persist_question(
                 candidate_id=session.candidateId,
-                question_id=question_id,
+                question_text=question_text or question_id,
                 ai_feedback=ai_feedback,
                 score=score,
                 strengths=strengths or [],
@@ -295,7 +296,7 @@ class SessionManager:
     async def _persist_question(
         self,
         candidate_id: str,
-        question_id: str,
+        question_text: str,
         ai_feedback: str,
         score: float,
         strengths: list[str],
@@ -308,7 +309,7 @@ class SessionManager:
             await self._backend_client.create_question(
                 candidate_id,
                 data={
-                    "question": question_id,
+                    "question": question_text,
                     "answer": answer,
                     "aiFeedback": ai_feedback,
                     "score": score,
@@ -441,8 +442,11 @@ class SessionManager:
 
         if self._backend_client:
             try:
-                perf_data = result.model_dump()
+                perf_data = result.model_dump(exclude={"llmAdjustment"})
                 perf_data["cheat"] = cheat.level
+                for k in ("confidence", "speaking", "eyeContact"):
+                    if perf_data.get(k) is None:
+                        perf_data[k] = 0
                 await self._backend_client.create_performance(
                     session.candidateId,
                     data=perf_data,
