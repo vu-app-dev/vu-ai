@@ -35,6 +35,7 @@ Estimated time: {estimated_time_minutes} minutes
 6. Each question must be clear, specific, and answerable in 2-5 minutes
 7. Tailor questions to the candidate's skills when CV data is available
 8. Do not repeat or paraphrase existing questions
+9. CRITICAL: All questions must be answerable VERBALLY. The candidate speaks their answer — they cannot write code, draw diagrams, or share a screen. Ask questions that can be explained in words (concepts, trade-offs, reasoning, experience). NEVER ask the candidate to "write", "implement", "code", or "type" anything.
 </question_requirements>
 
 <existing_questions>

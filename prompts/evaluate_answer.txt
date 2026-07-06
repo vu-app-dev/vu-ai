@@ -89,6 +89,7 @@ FOLLOW-UP QUESTIONS:
 - The follow-up should be a hint, a simpler sub-question, or a more specific angle on the same topic.
 - Do NOT generate a follow-up question that is similar to or the same as any question in the "already asked" list above.
 - If the candidate completely doesn't know the answer, do NOT use follow_up — use next_question instead.
+- CRITICAL: All questions must be answerable VERBALLY. The candidate speaks their answer — they cannot write code. Ask questions that can be explained in words. NEVER ask the candidate to "write", "implement", "code", or "type" anything.
 
 NEXT QUESTION:
 - Set nextAction to "next_question" when the answer is adequate or sufficient — the candidate demonstrated enough understanding to move on.
@@ -97,7 +98,7 @@ NEXT QUESTION:
 INTERVIEW TYPE WEIGHTING:
 - TECHNICAL: Weight technical and problemSolving higher. Focus on correctness, depth, approach.
 - BEHAVIORAL: Weight communication and structuredThinking higher. Focus on STAR method, impact, self-awareness.
-- CODING: Weight problemSolving and technical higher. Focus on algorithm choice, edge cases, complexity.
+- CODING: Weight problemSolving and technical higher. Focus on algorithm choice, edge cases, complexity. All questions must be conceptual/explanatory (e.g. "Explain how you would approach...", "What are the trade-offs between...") — the candidate speaks answers verbally and cannot write code.
 
 - Set nextAction to "end" only if this is the final question and the interview should conclude.
 - Include followUpQuestion only when nextAction is "follow_up", otherwise set it to null.
