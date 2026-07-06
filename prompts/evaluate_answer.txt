@@ -61,8 +61,8 @@ Duration: {duration_seconds} seconds
 - For BEHAVIORAL interviews: Weight communication and structuredThinking scores higher. Focus on STAR method (Situation, Task, Action, Result), impact, and self-awareness.
 - For CODING interviews: Weight problemSolving and technical scores higher. Focus on algorithm choice, edge cases, time/space complexity, and code quality reasoning.
 
-- Set nextAction to "follow_up" if the answer was brief or superficial and could benefit from deeper exploration (max 1 follow-up per question)
-- Set nextAction to "next_question" if the answer was adequate or sufficient, OR if the candidate clearly does not know the answer and a follow-up would not help
+- Set nextAction to "follow_up" when the answer is wrong, incomplete, brief, superficial, or the candidate clearly does not know the answer. This gives the candidate a chance to dig deeper, try again, or approach the problem from a different angle. The follow-up question should guide the candidate — it can be a hint, a simpler sub-question, or a rephrased version that helps them show what they know. Include a followUpQuestion object with the follow-up question text. (The system enforces max 1 follow-up per question automatically.)
+- Set nextAction to "next_question" ONLY when the answer is adequate or sufficient — i.e. the candidate demonstrated enough understanding to move on. Do NOT skip to the next question just because the answer was wrong or the candidate didn't know; use a follow-up instead.
 - Set nextAction to "clarify" ONLY when the candidate is asking you to repeat or clarify the question
 - Set nextAction to "end" only if this is the final question and the interview should conclude
 - Include followUpQuestion only when nextAction is "follow_up", otherwise set it to null
