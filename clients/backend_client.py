@@ -48,7 +48,7 @@ class BackendClient:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=self._timeout)
+            self._client = httpx.AsyncClient(timeout=self._timeout, follow_redirects=True)
         return self._client
 
     def _headers(self, idempotency_key: str | None = None) -> dict[str, str]:
