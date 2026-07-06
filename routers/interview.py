@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/interview", tags=["interview"])
 
 MAX_FOLLOWUPS_PER_MOCK = 2
+MAX_FOLLOWUPS_PER_QUESTION = 1
 MOCK_GRACE_SECONDS = 30
 
 session_manager = SessionManager(backend_client=backend_client)
@@ -518,12 +519,14 @@ async def _handle_answer(
 
     if next_action == "follow_up" and follow_up is not None:
         fu_text = follow_up.get("text", "")
-        already_has_fu = any(
-            _question_dict(q).get("id", "").startswith(f"{question_id}_f") for q in session.questionsAsked
+        followups_for_q = sum(
+            1 for q in session.questionsAsked
+            if _question_dict(q).get("id", "").startswith(f"{question_id}_f")
         )
+        too_many_per_q = followups_for_q >= MAX_FOLLOWUPS_PER_QUESTION
         too_many = _count_followups(session.questionsAsked) >= MAX_FOLLOWUPS_PER_MOCK
         is_dup = _is_duplicate_question(fu_text, session)
-        if fu_text and not already_has_fu and not too_many and not is_dup:
+        if fu_text and not too_many_per_q and not too_many and not is_dup:
             try:
                 fu_idx = (answered_idx + 1) if answered_idx is not None else (session.currentQuestionIndex + 1)
                 follow_up_question = Question(
