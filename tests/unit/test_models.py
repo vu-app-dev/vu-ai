@@ -45,13 +45,14 @@ class TestStartSessionRequest:
         with pytest.raises(ValidationError):
             StartSessionRequest()
 
-    def test_missing_mock_id(self):
-        with pytest.raises(ValidationError):
-            StartSessionRequest(candidateId="c1", cvUrl="https://...")
+    def test_missing_mock_id_defaults_to_empty(self):
+        req = StartSessionRequest(candidateId="c1", cvUrl="https://...")
+        assert req.mockId == ""
+        assert req.mocks is None
 
-    def test_missing_cv_url(self):
-        with pytest.raises(ValidationError):
-            StartSessionRequest(mockId="m1", candidateId="c1")
+    def test_missing_cv_url_defaults_to_empty(self):
+        req = StartSessionRequest(mockId="m1", candidateId="c1")
+        assert req.cvUrl == ""
 
 
 class TestQuestion:

@@ -98,6 +98,7 @@ class PerformanceResult(BaseModel):
     eyeContact: Optional[float] = None
     cheat: CheatClassification = CheatClassification()
     llmAdjustment: Optional[LLMAdjustment] = None
+    overallSummary: Optional[str] = None
 
     @field_validator("score", mode="after")
     @classmethod

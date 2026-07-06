@@ -27,25 +27,75 @@ class Answer:
     areasToImprove: list[str] = field(default_factory=list)
     transcriptScores: TranscriptScores | None = None
     audioScores: AudioScores | None = None
+    mockIndex: int = 0
+
+
+@dataclass
+class MockState:
+    mockId: str
+    mockData: dict[str, Any] = field(default_factory=dict)
+    questionsAsked: list[dict] = field(default_factory=list)
+    currentQuestionIndex: int = 0
+    answers: list[Answer] = field(default_factory=list)
+    followupCount: int = 0
+    startedAt: float = field(default_factory=time.time)
+    timeLimitSeconds: float | None = None
+    timeUp: bool = False
+    graceExpired: bool = False
+    graceEndsAt: float | None = None
 
 
 @dataclass
 class Session:
     id: str
     token: str
-    mockId: str
     candidateId: str
     cvUrl: str
-    mockData: dict[str, Any] = field(default_factory=dict)
+    mocks: list[MockState] = field(default_factory=list)
+    currentMockIndex: int = 0
     createdAt: float = field(default_factory=time.time)
     lastActivityAt: float = field(default_factory=time.time)
-    answers: list[Answer] = field(default_factory=list)
     tabSwitches: int = 0
     videoFrameResults: list[dict] = field(default_factory=list)
-    questionsAsked: list[dict] = field(default_factory=list)
-    currentQuestionIndex: int = 0
     status: str = "active"
     timeLimitSeconds: float | None = None
+
+    @property
+    def mockId(self) -> str:
+        return self.mocks[self.currentMockIndex].mockId if self.mocks else ""
+
+    @property
+    def mockData(self) -> dict[str, Any]:
+        return self.mocks[self.currentMockIndex].mockData if self.mocks else {}
+
+    @property
+    def currentMock(self) -> MockState | None:
+        return self.mocks[self.currentMockIndex] if self.mocks else None
+
+    @property
+    def questionsAsked(self) -> list[dict]:
+        return self.mocks[self.currentMockIndex].questionsAsked if self.mocks else []
+
+    @questionsAsked.setter
+    def questionsAsked(self, value: list[dict]):
+        if self.mocks:
+            self.mocks[self.currentMockIndex].questionsAsked = value
+
+    @property
+    def currentQuestionIndex(self) -> int:
+        return self.mocks[self.currentMockIndex].currentQuestionIndex if self.mocks else 0
+
+    @currentQuestionIndex.setter
+    def currentQuestionIndex(self, value: int):
+        if self.mocks:
+            self.mocks[self.currentMockIndex].currentQuestionIndex = value
+
+    @property
+    def answers(self) -> list[Answer]:
+        all_answers: list[Answer] = []
+        for mock in self.mocks:
+            all_answers.extend(mock.answers)
+        return all_answers
 
     def touch(self):
         self.lastActivityAt = time.time()
@@ -66,30 +116,53 @@ class SessionManager:
 
     def create_session(
         self,
-        mock_id: str,
-        candidate_id: str,
-        cv_url: str,
+        mock_id: str = "",
+        candidate_id: str = "",
+        cv_url: str = "",
         mock_data: dict[str, Any] | None = None,
+        mocks: list[dict[str, Any]] | None = None,
     ) -> Session:
         self._cleanup_expired()
         session_id = secrets.token_urlsafe(16)
         token = secrets.token_urlsafe(32)
-        mock_data = mock_data or {}
-        estimated_minutes = mock_data.get("estimatedTimeInMinutes", 60)
-        time_limit_seconds = estimated_minutes * 60 + self._time_limit_buffer
+
+        mock_states: list[MockState] = []
+        if mocks:
+            for m in mocks:
+                m_id = m.get("mockId", "")
+                m_data = m.get("mockData", {})
+                est_min = m_data.get("estimatedTimeInMinutes", 60)
+                mock_states.append(MockState(
+                    mockId=m_id,
+                    mockData=m_data,
+                    timeLimitSeconds=est_min * 60,
+                ))
+        else:
+            mock_data = mock_data or {}
+            est_min = mock_data.get("estimatedTimeInMinutes", 60)
+            mock_states.append(MockState(
+                mockId=mock_id,
+                mockData=mock_data,
+                timeLimitSeconds=est_min * 60,
+            ))
+
+        total_mock_time = sum(m.timeLimitSeconds or 0 for m in mock_states)
+        time_limit_seconds = total_mock_time + self._time_limit_buffer
 
         session = Session(
             id=session_id,
             token=token,
-            mockId=mock_id,
             candidateId=candidate_id,
             cvUrl=cv_url,
-            mockData=mock_data,
+            mocks=mock_states,
             timeLimitSeconds=time_limit_seconds,
         )
         self._sessions[session_id] = session
         self._tokens[session_id] = token
-        logger.info("Created session %s for candidate %s", session_id, candidate_id)
+        logger.info(
+            "Created session %s for candidate %s with %d mock(s)",
+            session_id, candidate_id, len(mock_states),
+        )
         return session
 
     def get_session(self, session_id: str) -> Session | None:
@@ -126,12 +199,16 @@ class SessionManager:
         session = self._get_active_session(session_id)
         if session is None:
             raise ValueError(f"Session {session_id} not found or expired")
-        session.answers.append(Answer(
+        mock = session.currentMock
+        if mock is None:
+            raise ValueError(f"Session {session_id} has no active mock")
+        mock.answers.append(Answer(
             questionId=question_id,
             transcript=transcript,
             durationSeconds=duration_seconds,
             startedAt=started_at,
             endedAt=ended_at,
+            mockIndex=session.currentMockIndex,
         ))
         session.touch()
 
@@ -150,6 +227,30 @@ class SessionManager:
             return
         session.tabSwitches = max(session.tabSwitches, count)
         session.touch()
+
+    def get_current_mock(self, session_id: str) -> MockState | None:
+        session = self._get_active_session(session_id)
+        if session is None:
+            return None
+        return session.currentMock
+
+    def transition_to_next_mock(self, session_id: str) -> bool:
+        session = self._get_active_session(session_id)
+        if session is None:
+            return False
+        next_index = session.currentMockIndex + 1
+        if next_index >= len(session.mocks):
+            return False
+        session.currentMockIndex = next_index
+        next_mock = session.mocks[next_index]
+        next_mock.startedAt = time.time()
+        next_mock.timeUp = False
+        next_mock.graceExpired = False
+        next_mock.graceEndsAt = None
+        next_mock.currentQuestionIndex = 0
+        session.touch()
+        logger.info("Session %s transitioned to mock %d/%d", session_id, next_index + 1, len(session.mocks))
+        return True
 
     async def complete_question(
         self,
@@ -211,7 +312,7 @@ class SessionManager:
                     "answer": answer,
                     "aiFeedback": ai_feedback,
                     "score": score,
-                    "strengths": strengths,
+                    "strength": strengths,
                     "areasToImprove": areas_to_improve,
                     "durationInMinutes": duration_minutes,
                 },
@@ -292,10 +393,14 @@ class SessionManager:
 
         llm_adjustment = None
         try:
+            mock_type_for_adjustment = (
+                session.mocks[0].mockData.get("type", "TECHNICAL")
+                if session.mocks else "TECHNICAL"
+            )
             llm_adjustment = await score_aggregator.adjust_with_llm(
                 weighted_avg=weighted_avg,
                 question_results=question_results,
-                mock_type=session.mockData.get("type", "TECHNICAL"),
+                mock_type=mock_type_for_adjustment,
                 duration_minutes=round(total_duration / 60) if total_duration > 0 else 30,
                 questions_answered=len(scored_answers),
             )
@@ -303,6 +408,18 @@ class SessionManager:
             logger.warning("LLM adjustment failed: %s", e)
 
         final_score = score_aggregator.compute_performance(avg_transcript, audio_scores, video_scores, llm_adjustment)
+
+        overall_summary = None
+        try:
+            overall_summary = await score_aggregator.generate_summary(
+                weighted_avg=weighted_avg,
+                question_results=question_results,
+                mock_type=mock_type_for_adjustment,
+                duration_minutes=round(total_duration / 60) if total_duration > 0 else 30,
+                questions_answered=len(scored_answers),
+            )
+        except Exception as e:
+            logger.warning("Overall summary generation failed: %s", e)
 
         result = PerformanceResult(
             score=final_score,
@@ -317,15 +434,18 @@ class SessionManager:
             eyeContact=video_scores.eyeContact,
             cheat=cheat,
             llmAdjustment=llm_adjustment,
+            overallSummary=overall_summary,
         )
 
         logger.info("Ended session %s, score=%.1f, cheat=%s", session_id, final_score, cheat.level)
 
         if self._backend_client:
             try:
+                perf_data = result.model_dump()
+                perf_data["cheat"] = cheat.level
                 await self._backend_client.create_performance(
                     session.candidateId,
-                    data=result.model_dump(),
+                    data=perf_data,
                     idempotency_key=f"{session_id}-performance",
                 )
             except Exception as e:

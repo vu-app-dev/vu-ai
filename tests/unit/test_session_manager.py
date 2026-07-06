@@ -5,7 +5,7 @@ import pytest
 
 from models.interview import CheatEvidence
 from models.scoring import AudioScores, PerformanceResult, TranscriptScores
-from services.interview.session_manager import Session, SessionManager
+from services.interview.session_manager import Session, SessionManager, MockState
 
 
 class TestCreateSession:
@@ -270,3 +270,164 @@ class TestServerEnforcedTimeLimit:
         )
         result = mgr.get_session(session.id)
         assert result is not None
+
+
+class TestMultiMockSession:
+    def test_create_session_with_mocks_list(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL", "estimatedTimeInMinutes": 15}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL", "estimatedTimeInMinutes": 15}},
+            {"mockId": "m3", "mockData": {"type": "CODING", "estimatedTimeInMinutes": 15}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        assert len(session.mocks) == 3
+        assert session.currentMockIndex == 0
+        assert session.mockId == "m1"
+        assert session.mockData["type"] == "TECHNICAL"
+        assert session.mocks[0].timeLimitSeconds == 15 * 60
+        assert session.mocks[1].timeLimitSeconds == 15 * 60
+        assert session.mocks[2].timeLimitSeconds == 15 * 60
+
+    def test_multi_mock_total_time_limit(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"estimatedTimeInMinutes": 15}},
+            {"mockId": "m2", "mockData": {"estimatedTimeInMinutes": 30}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        expected_total = (15 * 60) + (30 * 60) + 60
+        assert session.timeLimitSeconds == expected_total
+
+    def test_transition_to_next_mock(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL"}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL"}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        assert session.currentMockIndex == 0
+        has_next = mgr.transition_to_next_mock(session.id)
+        assert has_next is True
+        assert session.currentMockIndex == 1
+        assert session.mockId == "m2"
+        assert session.mockData["type"] == "BEHAVIORAL"
+
+    def test_transition_returns_false_when_no_more_mocks(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL"}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL"}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        mgr.transition_to_next_mock(session.id)
+        has_next = mgr.transition_to_next_mock(session.id)
+        assert has_next is False
+
+    def test_get_current_mock(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL"}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL"}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        mock = mgr.get_current_mock(session.id)
+        assert mock is not None
+        assert mock.mockId == "m1"
+        mgr.transition_to_next_mock(session.id)
+        mock = mgr.get_current_mock(session.id)
+        assert mock is not None
+        assert mock.mockId == "m2"
+
+    def test_answers_stored_per_mock(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL"}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL"}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        mgr.add_answer(session.id, "q1", "answer 1", 60, "t1", "t2")
+        assert len(session.mocks[0].answers) == 1
+        assert session.mocks[0].answers[0].mockIndex == 0
+        mgr.transition_to_next_mock(session.id)
+        mgr.add_answer(session.id, "q2", "answer 2", 60, "t3", "t4")
+        assert len(session.mocks[1].answers) == 1
+        assert session.mocks[1].answers[0].mockIndex == 1
+        all_answers = session.answers
+        assert len(all_answers) == 2
+
+    def test_questions_asked_per_mock(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL"}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL"}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        session.questionsAsked = [{"id": "q1", "text": "tech question"}]
+        assert len(session.mocks[0].questionsAsked) == 1
+        mgr.transition_to_next_mock(session.id)
+        session.questionsAsked = [{"id": "q1", "text": "behavioral question"}]
+        assert len(session.mocks[1].questionsAsked) == 1
+        assert session.mocks[0].questionsAsked[0]["text"] == "tech question"
+
+    @pytest.mark.asyncio
+    async def test_end_session_aggregates_across_mocks(self):
+        mgr = SessionManager()
+        mocks = [
+            {"mockId": "m1", "mockData": {"type": "TECHNICAL", "estimatedTimeInMinutes": 15}},
+            {"mockId": "m2", "mockData": {"type": "BEHAVIORAL", "estimatedTimeInMinutes": 15}},
+        ]
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=mocks,
+        )
+        mgr.add_answer(session.id, "q1", " ".join(["React"] * 130), 60, "t1", "t2")
+        answer1 = session.mocks[0].answers[0]
+        answer1.aiFeedback = "Good"
+        answer1.score = 80.0
+        answer1.transcriptScores = TranscriptScores(
+            communication=80.0, problemSolving=75.0, technical=85.0,
+            clarityOfExplanation=70.0, structuredThinking=78.0, askingClarifications=72.0,
+        )
+        mgr.transition_to_next_mock(session.id)
+        mgr.add_answer(session.id, "q2", " ".join(["leadership"] * 130), 60, "t3", "t4")
+        answer2 = session.mocks[1].answers[0]
+        answer2.aiFeedback = "Good behavioral answer"
+        answer2.score = 85.0
+        answer2.transcriptScores = TranscriptScores(
+            communication=85.0, problemSolving=70.0, technical=60.0,
+            clarityOfExplanation=80.0, structuredThinking=82.0, askingClarifications=75.0,
+        )
+        result = await mgr.end_session(session.id)
+        assert result.score > 0
+        assert result.communication > 0
+        assert len(session.answers) == 2

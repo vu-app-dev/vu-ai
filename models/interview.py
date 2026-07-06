@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field
 
 
 class StartSessionRequest(BaseModel):
-    mockId: str
+    mockId: str = ""
     candidateId: str
-    cvUrl: str
+    cvUrl: str = ""
     mockData: Optional[dict] = None
+    mocks: Optional[list[dict]] = None
 
 
 class Question(BaseModel):
@@ -40,6 +41,8 @@ class StartSessionResponse(BaseModel):
     firstQuestion: Question
     firstQuestionAudio: Optional[str] = None
     cvAnalysis: Optional[dict] = None
+    mockIndex: int = 0
+    totalMocks: int = 1
 
 
 class WSMessage(BaseModel):
@@ -109,12 +112,34 @@ class WSAnalysisUpdateMessage(WSMessage):
     eyeContactScore: Optional[float] = None
 
 
+class WSMockTimeWarningMessage(WSMessage):
+    type: Literal["mock_time_warning"] = "mock_time_warning"
+    mockIndex: int
+    graceSeconds: int = 30
+    message: str
+
+
+class WSMockTransitionMessage(WSMessage):
+    type: Literal["mock_transition"] = "mock_transition"
+    mockIndex: int
+    totalMocks: int
+    mockId: str
+    mockType: str
+    reason: Literal["completed", "time_expired"]
+    intro: str
+    introAudio: Optional[str] = None
+    firstQuestion: Question
+    firstQuestionAudio: Optional[str] = None
+
+
 class WSSessionEndMessage(WSMessage):
     type: Literal["session_end"] = "session_end"
     reason: Literal["completed", "time_expired"]
     performance: Optional[dict] = None
     cheat: str = "Clean"
     cheatEvidence: Optional[CheatEvidence] = None
+    mockIndex: Optional[int] = None
+    totalMocks: Optional[int] = None
 
 
 class WSErrorMessage(WSMessage):

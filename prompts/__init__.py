@@ -46,6 +46,18 @@ def format_prompt(template_name: str, **kwargs) -> str:
     if "total_questions" not in kwargs:
         kwargs["total_questions"] = "5-8"
 
+    if "mock_number" not in kwargs:
+        kwargs["mock_number"] = 1
+
+    if "total_mocks" not in kwargs:
+        kwargs["total_mocks"] = 1
+
+    if "asked_questions" not in kwargs:
+        kwargs["asked_questions"] = "None yet — this is the first question."
+
+    if "conversation_history" not in kwargs:
+        kwargs["conversation_history"] = "None — this is the first question."
+
     if "cv_skills_section" not in kwargs:
         cv_skills = kwargs.get("cv_skills", "")
         if cv_skills:

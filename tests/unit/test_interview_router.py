@@ -26,6 +26,35 @@ class TestStartSession:
             assert "sessionToken" in data
             assert data["intro"] is not None
 
+    def test_start_multi_mock_returns_totalMocks(self):
+        with patch("routers.interview.backend_client") as mock_bc:
+            mock_bc.get_mock = AsyncMock(return_value=None)
+            response = client.post("/api/interview/start", json={
+                "candidateId": "c1",
+                "cvUrl": "https://example.com/cv.pdf",
+                "mocks": [
+                    {"mockId": "m1", "mockData": {"type": "TECHNICAL", "estimatedTimeInMinutes": 15}},
+                    {"mockId": "m2", "mockData": {"type": "BEHAVIORAL", "estimatedTimeInMinutes": 15}},
+                ],
+            })
+            assert response.status_code == 200
+            data = response.json()
+            assert data["mockIndex"] == 0
+            assert data["totalMocks"] == 2
+
+    def test_start_single_mock_backward_compat(self):
+        with patch("routers.interview.backend_client") as mock_bc:
+            mock_bc.get_mock = AsyncMock(return_value=None)
+            response = client.post("/api/interview/start", json={
+                "mockId": "mock-1",
+                "candidateId": "c1",
+                "cvUrl": "https://example.com/cv.pdf",
+            })
+            assert response.status_code == 200
+            data = response.json()
+            assert data["mockIndex"] == 0
+            assert data["totalMocks"] == 1
+
 
 class TestEndSessionREST:
     def test_end_unknown_session_returns_409(self):

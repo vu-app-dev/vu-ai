@@ -33,10 +33,18 @@ class TranscriptScorer:
         order: int = 1,
         cv_skills: list[str] | None = None,
         duration_seconds: int = 60,
+        mock_number: int = 1,
+        total_mocks: int = 1,
+        asked_questions: list[str] | None = None,
+        conversation_history: str = "",
     ) -> tuple[TranscriptScores, EvaluateAnswerResponse | None]:
         if not transcript or not transcript.strip():
             logger.warning("Empty transcript received, returning zero scores")
             return TranscriptScores(), None
+
+        asked_list = "None yet — this is the first question."
+        if asked_questions:
+            asked_list = "\n".join(f"- {q}" for q in asked_questions)
 
         try:
             prompt = format_prompt(
@@ -49,6 +57,10 @@ class TranscriptScorer:
                 order=order,
                 question_number=order,
                 total_questions="5-8",
+                mock_number=mock_number,
+                total_mocks=total_mocks,
+                asked_questions=asked_list,
+                conversation_history=conversation_history,
             )
 
             response = await self._llm.generate_json(prompt, EvaluateAnswerResponse)
@@ -78,6 +90,10 @@ class TranscriptScorer:
         order: int = 1,
         cv_skills: list[str] | None = None,
         duration_seconds: int = 60,
+        mock_number: int = 1,
+        total_mocks: int = 1,
+        asked_questions: list[str] | None = None,
+        conversation_history: str = "",
     ) -> TranscriptScores:
         scores, _ = await self.evaluate(
             question=question,
@@ -87,5 +103,9 @@ class TranscriptScorer:
             order=order,
             cv_skills=cv_skills,
             duration_seconds=duration_seconds,
+            mock_number=mock_number,
+            total_mocks=total_mocks,
+            asked_questions=asked_questions,
+            conversation_history=conversation_history,
         )
         return scores

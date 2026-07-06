@@ -112,3 +112,36 @@ class ScoreAggregator:
         if llm_adjustment:
             avg += llm_adjustment.adjustment
         return max(0.0, min(100.0, avg))
+
+    async def generate_summary(
+        self,
+        weighted_avg: float,
+        question_results: str,
+        mock_type: str = "TECHNICAL",
+        duration_minutes: int = 30,
+        questions_answered: int = 5,
+    ) -> str | None:
+        try:
+            prompt = format_prompt(
+                "generate_summary",
+                weighted_score=weighted_avg,
+                question_results=question_results,
+                mock_type=mock_type,
+                duration_minutes=duration_minutes,
+                questions_answered=questions_answered,
+            )
+
+            from pydantic import BaseModel
+
+            class _SummaryResponse(BaseModel):
+                summary: str = ""
+
+            response = await self._llm.generate_json(prompt, _SummaryResponse)
+
+            if response and response.summary:
+                return response.summary
+
+        except Exception as e:
+            logger.warning("LLM summary generation failed: %s", e)
+
+        return None
