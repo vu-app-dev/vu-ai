@@ -373,6 +373,12 @@ async def interview_websocket(
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for session %s", session_id)
+        if session.status != "completed":
+            try:
+                result = await session_manager.end_session(session_id)
+                logger.info("Session %s ended on disconnect, score=%.1f", session_id, result.score)
+            except Exception as e:
+                logger.warning("Failed to end session %s on disconnect: %s", session_id, e)
     except Exception as e:
         logger.error("WebSocket error for session %s: %s", session_id, e)
         try:

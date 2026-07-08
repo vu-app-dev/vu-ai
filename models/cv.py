@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class CvAnalyzeRequest(BaseModel):
     cvUrl: str
     jobContext: dict = Field(default_factory=dict)
+    candidateId: Optional[str] = None
 
 
 class CvAnalyzeResponse(BaseModel):

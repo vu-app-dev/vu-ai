@@ -57,7 +57,7 @@ class CvAnalyzer:
 
     async def _download(self, url: str) -> bytes | None:
         try:
-            async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
                 response = await client.get(url)
                 response.raise_for_status()
                 return response.content
