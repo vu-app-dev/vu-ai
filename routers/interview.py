@@ -465,6 +465,10 @@ async def _handle_answer(
         areas_to_improve = eval_response.areasToImprove or []
         next_action = eval_response.nextAction or "next_question"
         follow_up = eval_response.followUpQuestion
+        # Guard: LLM sometimes says "No answer given" even when transcript has content
+        if transcript and len(transcript.strip()) > 15 and "no answer" in feedback_text.lower():
+            logger.warning("LLM returned 'no answer' feedback despite non-empty transcript (%d chars), overriding", len(transcript))
+            feedback_text = "Good response! Let's continue."
     else:
         logger.warning("LLM evaluation returned None for session %s, question %s", session_id, question_id)
         feedback_text = "Let's continue."

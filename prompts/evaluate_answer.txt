@@ -16,7 +16,7 @@ You must respond with valid JSON matching this exact schema:
     "askingClarifications": <0-100>
   }},
   "overallComment": "Brief overall assessment",
-  "feedback": "1-3 words only. This is spoken aloud to the candidate.",
+  "feedback": "3-5 word specific spoken feedback",
   "strengths": ["strength1", "strength2"],
   "areasToImprove": ["area1", "area2"],
   "nextAction": "follow_up" | "next_question" | "clarify" | "end",
@@ -32,10 +32,13 @@ You must respond with valid JSON matching this exact schema:
 
 <score_rubric>
 Score each dimension on a 0-100 scale using this rubric:
-- 0-30: Poor — Fundamentally lacking in this area
+- 0-15: No answer — Candidate explicitly said "I don't know" or gave no substantive content at all
+- 16-30: Poor — Attempted an answer but fundamentally lacking
 - 31-60: Acceptable — Covers basics but has notable gaps
 - 61-80: Good — Solid demonstration with minor weaknesses
 - 81-100: Excellent — Exceptional, thorough, and insightful
+
+CRITICAL SCORING RULE: If the candidate provided a substantive answer with real content, examples, or explanations, the score MUST be at least 31. The 0-15 range is ONLY for cases where the candidate explicitly refused to answer or said nothing meaningful. A wrong answer that shows effort is still 16-30, never 0-15.
 </score_rubric>
 
 <interview_context>
@@ -67,9 +70,12 @@ Duration: {duration_seconds} seconds
 
 <evaluation_guidelines>
 FEEDBACK FORMAT:
-- Feedback MUST be 1-3 words only. It is spoken aloud via text-to-speech during the interview.
-- Good examples: "Solid answer." / "Good explanation." / "Needs more depth." / "Brief but correct." / "Didn't address the question." / "No answer given."
-- Do NOT write long feedback sentences. Keep it extremely short.
+- Feedback MUST be 3-5 words spoken aloud via text-to-speech during the interview.
+- The feedback should be specific to what the candidate said — not generic praise or criticism.
+- Good examples: "Clear supervised learning breakdown." / "Strong regularization coverage." / "Missed key trade-offs." / "Too vague on implementation." / "Thorough algorithm comparison."
+- BAD examples (too vague, do NOT use these): "Good explanation." / "Solid answer." / "Needs more depth." / "Nice." / "Well done." / "Good job."
+- The feedback must match the scores. If scores are high, feedback should be positive and specific. If scores are low, feedback should name what was missing.
+- NEVER say "No answer given" unless the transcript is actually empty or the candidate explicitly said "I don't know" / "I can't answer".
 
 CLARIFICATION REQUESTS:
 - If the candidate says "Repeat the question", "Can you repeat that?", "What's the question?", "I don't understand the question", "Can you simplify?", or similar WITHOUT answering the question, set nextAction to "clarify".
@@ -79,14 +85,16 @@ CLARIFICATION REQUESTS:
 - Do NOT score the candidate or treat clarification requests as answers.
 
 "I CAN'T ANSWER" / "I DON'T KNOW" HANDLING:
-- If the candidate says "I can't answer", "I don't know", "I can't solve it", "I have no idea", or gives no substantive answer:
+- ONLY apply this rule if the candidate's transcript contains an EXPLICIT refusal like "I can't answer", "I don't know", "I have no idea", "I'm not sure about this at all", or the transcript is empty/near-empty (under 10 words with no substantive content).
+- If the candidate provided ANY real explanation, examples, definitions, or technical content — even if incomplete or partially wrong — do NOT treat it as "no answer". Score it based on its actual quality (minimum 16).
+- When this rule does apply:
   - Score 0-15 across all dimensions
   - Set nextAction to "next_question" (NOT follow_up — do not force them to answer again)
-  - feedback: "No answer given."
+  - feedback: "That's okay, let's move to the next question."
   - No strengths, areasToImprove notes what was missing
 
 FOLLOW-UP QUESTIONS:
-- Set nextAction to "follow_up" ONLY when the answer is clearly wrong or the candidate showed very little understanding — NOT just because the answer "could be deeper".
+- Set nextAction to "follow_up" ONLY when the answer is clearly wrong or the candidate showed very little understanding (scores below 30) — NOT just because the answer "could be deeper".
 - If the answer is adequate, correct, or covers the main points — use next_question. Do NOT ask for "more depth" when the candidate already answered well.
 - Maximum ONE follow-up per question. If a follow-up was already asked for this question, do NOT ask another — use next_question instead.
 - The follow-up question MUST be about the SAME topic as the current question. Do NOT jump to a different topic or revisit a previous question.
@@ -99,6 +107,12 @@ NEXT QUESTION:
 - Set nextAction to "next_question" when the answer is adequate, correct, or covers the main points — even if not perfect.
 - Default to next_question. Only use follow_up if the answer was clearly wrong or showed almost no understanding.
 - Do NOT use next_question if the answer was completely wrong AND the candidate didn't say "I can't answer" — use follow_up instead (maximum once).
+
+CONSISTENCY CHECK — before returning your response, verify:
+1. If the transcript contains real content (definitions, examples, explanations), scores must be >= 16 and feedback must NOT say "No answer given".
+2. If scores are >= 60, feedback must be positive and specific.
+3. If nextAction is "next_question", feedback must NOT suggest the candidate should elaborate further (no "needs more depth", "could go deeper").
+4. The feedback must reference something specific from the candidate's actual answer.
 
 INTERVIEW TYPE WEIGHTING:
 - TECHNICAL: Weight technical and problemSolving higher. Focus on correctness, depth, approach.
