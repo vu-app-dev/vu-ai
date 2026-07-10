@@ -60,6 +60,7 @@ class Session:
     videoFrameResults: list[dict] = field(default_factory=list)
     status: str = "active"
     timeLimitSeconds: float | None = None
+    audioBuffer: bytearray = field(default_factory=bytearray)
 
     @property
     def mockId(self) -> str:
@@ -381,11 +382,31 @@ class SessionManager:
         video_scores = video_scorer.compute_session_scores(parsed_frames)
         cheat_metrics = video_scorer.compute_cheat_metrics(parsed_frames)
 
+        speaker_count = None
+        second_speaker_pct = None
+        if session.audioBuffer:
+            try:
+                from services.scoring.speaker_analyzer import SpeakerAnalyzer
+                speaker_analyzer = SpeakerAnalyzer()
+                speaker_result = await speaker_analyzer.analyze(bytes(session.audioBuffer))
+                if speaker_result:
+                    speaker_count = speaker_result.speaker_count
+                    second_speaker_pct = speaker_result.second_speaker_pct
+                    if speaker_result.speaker_count > 1:
+                        logger.warning(
+                            "Session %s: %d speakers detected, second speaker %.1f%%",
+                            session_id, speaker_result.speaker_count, speaker_result.second_speaker_pct,
+                        )
+            except Exception as e:
+                logger.warning("Speaker diarization failed for session %s: %s", session_id, e)
+
         cheat = cheat_detector.classify(
             tab_count=session.tabSwitches,
             no_face_pct=cheat_metrics.get("noFacePct"),
             multiple_face_pct=cheat_metrics.get("multipleFacePct"),
             gaze_away_pct=cheat_metrics.get("gazeAwayPct"),
+            speaker_count=speaker_count,
+            second_speaker_pct=second_speaker_pct,
         )
 
         weighted_avg = score_aggregator.compute_weighted_average(avg_transcript, audio_scores, video_scores)
@@ -458,6 +479,7 @@ class SessionManager:
             except Exception as e:
                 logger.warning("Failed to persist performance to backend: %s", e)
 
+        session.audioBuffer = bytearray()
         self._remove_session(session_id)
         return result
 

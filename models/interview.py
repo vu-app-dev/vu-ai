@@ -33,6 +33,8 @@ class CheatEvidence(BaseModel):
     noFacePct: Optional[float] = None
     multipleFacePct: Optional[float] = None
     gazeAwayPct: Optional[float] = None
+    speakerCount: Optional[int] = None
+    secondSpeakerPct: Optional[float] = None
 
 
 class CheatClassification(BaseModel):

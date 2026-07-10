@@ -60,7 +60,7 @@ async def transcribe_file(file: UploadFile = File(...)):
 
 
 @router.websocket("/realtime")
-async def websocket_realtime(websocket: WebSocket):
+async def websocket_realtime(websocket: WebSocket, session_id: str = None):
     """Real-time STT WebSocket using AssemblyAI Universal Streaming v3.
 
     Protocol:
@@ -120,5 +120,11 @@ async def websocket_realtime(websocket: WebSocket):
             pass
     finally:
         if stt:
+            if session_id:
+                from routers.interview import session_manager
+                session = session_manager._sessions.get(session_id)
+                if session:
+                    session.audioBuffer.extend(stt.get_buffered_audio())
+                    logger.info("[STT WS] Copied %d bytes of audio buffer to session %s", len(stt.audio_buffer), session_id)
             stt.close()
         logger.info("[STT WS] Cleanup complete")

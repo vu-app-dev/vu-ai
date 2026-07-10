@@ -186,3 +186,33 @@ class TestRealtimeSTT:
 
         stt = RealtimeSTT()
         assert stt.sample_rate == settings.SAMPLE_RATE
+
+
+class TestRealtimeSTTAudioBuffer:
+    @patch("services.stt.stt_realtime.ASSEMBLYAI_AVAILABLE", True)
+    @patch("services.stt.stt_realtime.StreamingClient")
+    def test_stream_buffers_audio(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        stt = RealtimeSTT()
+        loop = asyncio.new_event_loop()
+        try:
+            stt.connect(loop)
+            import base64 as b64
+            chunk1 = b64.b64encode(b"\x00\x01\x02\x03").decode()
+            chunk2 = b64.b64encode(b"\x04\x05\x06\x07").decode()
+            stt.stream(chunk1)
+            stt.stream(chunk2)
+            assert len(stt.audio_buffer) == 8
+            assert stt.audio_buffer == bytearray(b"\x00\x01\x02\x03\x04\x05\x06\x07")
+        finally:
+            loop.close()
+
+    @patch("services.stt.stt_realtime.ASSEMBLYAI_AVAILABLE", True)
+    def test_get_buffered_audio_returns_bytes(self):
+        stt = RealtimeSTT.__new__(RealtimeSTT)
+        stt.audio_buffer = bytearray(b"\x00\x01\x02")
+        result = stt.get_buffered_audio()
+        assert isinstance(result, bytes)
+        assert len(result) == 3

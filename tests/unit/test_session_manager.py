@@ -464,3 +464,14 @@ class TestMultiMockSession:
         assert result.problemSolving == 80.0  # only q2 tested it
         assert result.structuredThinking == 80.0  # only q2
         assert result.askingClarifications == 80.0  # only q2
+
+
+class TestSpeakerDiarizationInEndSession:
+    @pytest.mark.asyncio
+    async def test_end_session_no_audio_buffer(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        result = await mgr.end_session(session.id)
+        assert result.cheat.evidence.speakerCount is None
+        assert result.cheat.evidence.secondSpeakerPct is None
+        assert result.cheat.level == "Clean"

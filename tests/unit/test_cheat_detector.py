@@ -93,3 +93,43 @@ class TestCheatDetectorEvidence:
         assert result.evidence.noFacePct is None
         assert result.evidence.multipleFacePct is None
         assert result.evidence.gazeAwayPct is None
+
+
+class TestCheatDetectorSpeakerDiarization:
+    def test_clean_single_speaker(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=1, second_speaker_pct=0.0)
+        assert result.level == "Clean"
+
+    def test_clean_below_5_pct(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=2, second_speaker_pct=3.0)
+        assert result.level == "Clean"
+
+    def test_flagged_5_to_15_pct(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=2, second_speaker_pct=10.0)
+        assert result.level == "Flagged"
+
+    def test_critical_above_15_pct(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=2, second_speaker_pct=20.0)
+        assert result.level == "Critical"
+
+    def test_speaker_plus_tabs_escalates(self):
+        result = CheatDetector().classify(tab_count=4, speaker_count=2, second_speaker_pct=8.0)
+        assert result.level == "Critical"
+
+    def test_none_speaker_no_effect(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=None, second_speaker_pct=None)
+        assert result.level == "Clean"
+
+    def test_evidence_includes_speaker_fields(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=2, second_speaker_pct=12.5)
+        assert result.evidence.speakerCount == 2
+        assert result.evidence.secondSpeakerPct == 12.5
+
+    def test_three_speakers_critical(self):
+        result = CheatDetector().classify(tab_count=0, speaker_count=3, second_speaker_pct=30.0)
+        assert result.level == "Critical"
+
+    def test_evidence_null_speaker_by_default(self):
+        result = CheatDetector().classify(tab_count=0)
+        assert result.evidence.speakerCount is None
+        assert result.evidence.secondSpeakerPct is None

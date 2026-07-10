@@ -11,6 +11,8 @@ class CheatDetector:
         no_face_pct: float | None = None,
         multiple_face_pct: float | None = None,
         gaze_away_pct: float | None = None,
+        speaker_count: int | None = None,
+        second_speaker_pct: float | None = None,
     ) -> CheatClassification:
         signals: list[str] = []
         evidence = CheatEvidence(
@@ -18,6 +20,8 @@ class CheatDetector:
             noFacePct=no_face_pct,
             multipleFacePct=multiple_face_pct,
             gazeAwayPct=gaze_away_pct,
+            speakerCount=speaker_count,
+            secondSpeakerPct=second_speaker_pct,
         )
 
         if tab_count >= self.TAB_THRESHOLD_CRITICAL:
@@ -32,7 +36,16 @@ class CheatDetector:
         if gaze_away_pct is not None and gaze_away_pct > 40:
             signals.append(f"Gaze away {gaze_away_pct:.0f}% of frames")
 
-        level = self._determine_level(tab_count, no_face_pct, multiple_face_pct, gaze_away_pct)
+        if speaker_count is not None and speaker_count >= 2 and second_speaker_pct is not None:
+            if second_speaker_pct > 15:
+                signals.append(f"Multiple speakers detected ({speaker_count}, second speaker {second_speaker_pct:.0f}%)")
+            elif second_speaker_pct > 5:
+                signals.append(f"Second speaker detected ({second_speaker_pct:.0f}%)")
+
+        level = self._determine_level(
+            tab_count, no_face_pct, multiple_face_pct, gaze_away_pct,
+            speaker_count, second_speaker_pct,
+        )
 
         return CheatClassification(
             level=level,
@@ -45,6 +58,8 @@ class CheatDetector:
         no_face_pct: float | None = None,
         multiple_face_pct: float | None = None,
         gaze_away_pct: float | None = None,
+        speaker_count: int | None = None,
+        second_speaker_pct: float | None = None,
     ) -> str:
         critical_count = 0
         flagged_count = 0
@@ -70,6 +85,12 @@ class CheatDetector:
             if gaze_away_pct > 80:
                 critical_count += 1
             elif gaze_away_pct > 40:
+                flagged_count += 1
+
+        if speaker_count is not None and speaker_count >= 2 and second_speaker_pct is not None:
+            if second_speaker_pct > 15:
+                critical_count += 1
+            elif second_speaker_pct > 5:
                 flagged_count += 1
 
         if critical_count >= 1:

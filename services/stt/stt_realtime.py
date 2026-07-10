@@ -37,6 +37,7 @@ class RealtimeSTT:
         self.transcript_queue: Optional[asyncio.Queue] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.session_id: Optional[str] = None
+        self.audio_buffer: bytearray = bytearray()
 
     def connect(self, loop: asyncio.AbstractEventLoop) -> asyncio.Queue:
         """
@@ -108,7 +109,11 @@ class RealtimeSTT:
         """
         if self.client:
             audio_bytes = base64.b64decode(audio_base64)
+            self.audio_buffer.extend(audio_bytes)
             self.client.stream(audio_bytes)
+
+    def get_buffered_audio(self) -> bytes:
+        return bytes(self.audio_buffer)
 
     def close(self):
         """Disconnect from AssemblyAI real-time service."""
