@@ -27,6 +27,7 @@ from services.interview.question_generator import QuestionGenerator
 from services.interview.session_manager import SessionManager
 from services.scoring.audio_scorer import AudioScorer
 from services.scoring.score_aggregator import ScoreAggregator
+from services.cv.cv_analyzer import CvAnalyzer
 from services.scoring.transcript_scorer import TranscriptScorer, EvaluateAnswerResponse
 from services.video.face_analyzer import FaceAnalyzer
 from services.tts.tts_service import TTSService
@@ -189,6 +190,25 @@ async def start_session(request: StartSessionRequest):
 
     question_gen = _get_question_generator()
 
+    cv_skills: list[str] = []
+    cv_analysis_result = None
+    if request.cvUrl:
+        try:
+            cv_analyzer = CvAnalyzer()
+            cv_analysis_result = await cv_analyzer.analyze(
+                request.cvUrl,
+                {
+                    "title": first_mock_data.get("type", ""),
+                    "technologies": first_mock_data.get("technologies", []),
+                    "topics": first_mock_data.get("topics", []),
+                },
+            )
+            if cv_analysis_result and cv_analysis_result.skills:
+                cv_skills = cv_analysis_result.skills
+                logger.info("CV analysis completed, %d skills extracted: %s", len(cv_skills), cv_skills[:5])
+        except Exception as e:
+            logger.warning("CV analysis failed during interview start: %s", e)
+
     try:
         intro_text = await question_gen.generate_intro(
             mock_type=mock_type,
@@ -196,6 +216,7 @@ async def start_session(request: StartSessionRequest):
             topics=first_mock_data.get("topics", []),
             estimated_time=first_mock_data.get("estimatedTimeInMinutes", 30),
             difficulty=difficulty,
+            cv_skills=cv_skills,
         )
     except Exception:
         intro_text = QuestionGenerator._fallback_intro(
@@ -206,7 +227,7 @@ async def start_session(request: StartSessionRequest):
     try:
         questions = await question_gen.generate_questions(
             mock_data=first_mock_data,
-            cv_skills=[],
+            cv_skills=cv_skills,
         )
     except Exception:
         questions = QuestionGenerator._fallback_questions(
@@ -240,7 +261,7 @@ async def start_session(request: StartSessionRequest):
         introAudio=intro_audio,
         firstQuestion=first_question,
         firstQuestionAudio=first_q_audio,
-        cvAnalysis=None,
+        cvAnalysis=cv_analysis_result.model_dump() if cv_analysis_result else None,
         mockIndex=0,
         totalMocks=len(mocks_list),
     )

@@ -23,6 +23,7 @@ Interview type: {mock_type}
 Difficulty baseline: {difficulty}
 Technologies: {technologies}
 Topics: {topics}
+Mock context: {mock_description}
 Estimated time: {estimated_time_minutes} minutes
 {cv_skills_section}
 </context>

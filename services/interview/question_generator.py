@@ -54,10 +54,18 @@ class QuestionGenerator:
         technologies = _normalize_str_list(mock_data.get("technologies", []))
         topics = _normalize_str_list(mock_data.get("topics", []))
         estimated_time = mock_data.get("estimatedTimeInMinutes", 30)
+        mock_description = mock_data.get("description", "")
 
         try:
             num_questions = max(5, min(10, estimated_time // 3))
             existing = self._format_existing_questions(mock_questions)
+
+            logger.info(
+                "Generating questions: type=%s, difficulty=%s, technologies=%s, topics=%s, "
+                "cv_skills=%s, est_time=%dm, num_q=%d, existing=%d",
+                mock_type, difficulty, technologies, topics,
+                cv_skills or [], estimated_time, num_questions, len(mock_questions),
+            )
 
             prompt = format_prompt(
                 "generate_questions",
@@ -65,6 +73,7 @@ class QuestionGenerator:
                 difficulty=difficulty,
                 technologies=technologies,
                 topics=topics,
+                mock_description=mock_description or "No additional context provided.",
                 estimated_time_minutes=estimated_time,
                 num_questions=num_questions,
                 cv_skills=cv_skills or [],
