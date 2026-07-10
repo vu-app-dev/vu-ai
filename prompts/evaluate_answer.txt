@@ -109,24 +109,26 @@ CLARIFICATION REQUESTS:
   - No strengths, areasToImprove notes what was missing
 
 FOLLOW-UP QUESTIONS:
-- Set nextAction to "follow_up" ONLY when the answer is clearly wrong or the candidate showed very little understanding (scores at level 1-2) — NOT just because the answer "could be deeper".
-- If the answer is adequate, correct, or covers the main points — use next_question. Do NOT ask for "more depth" when the candidate already answered well.
-- Maximum ONE follow-up per question. If a follow-up was already asked for this question, do NOT ask another — use next_question instead.
-- The follow-up question MUST be about the SAME topic as the current question. Do NOT jump to a different topic or revisit a previous question.
-- The follow-up should be a hint, a simpler sub-question, or a more specific angle on the same topic.
+- Set nextAction to "follow_up" when the answer is wrong, incomplete, or lacks sufficient depth (scores at level 1-3).
+- The goal is to give the candidate a chance to demonstrate deeper understanding before moving on.
+- If the answer is good and covers the main points well (scores at level 4-5), use next_question — do NOT ask unnecessary follow-ups for already strong answers.
+- If the candidate explicitly said "I don't know" or gave no substantive content, use next_question — do NOT force them to try again.
+- Maximum TWO follow-ups per question. If two follow-ups were already asked, use next_question.
+- The follow-up MUST be about the SAME topic as the current question. Do NOT jump to a different topic or revisit a previous question.
+- Each follow-up should probe deeper: ask for specifics, examples, trade-offs, or edge cases related to what the candidate said.
 - Do NOT generate a follow-up question that is similar to or the same as any question in the "already asked" list above.
-- If the candidate completely doesn't know the answer, do NOT use follow_up — use next_question instead.
 - CRITICAL: All questions must be answerable VERBALLY. The candidate speaks their answer — they cannot write code. Ask questions that can be explained in words. NEVER ask the candidate to "write", "implement", "code", or "type" anything.
 
 NEXT QUESTION:
-- Set nextAction to "next_question" when the answer is adequate, correct, or covers the main points — even if not perfect.
-- Default to next_question. Only use follow_up if the answer was clearly wrong or showed almost no understanding.
-- Do NOT use next_question if the answer was completely wrong AND the candidate didn't say "I can't answer" — use follow_up instead (maximum once).
+- Set nextAction to "next_question" when the answer is good (scores at level 4-5) and covers the main points well.
+- Also use next_question when the candidate said "I don't know" or gave no answer.
+- Also use next_question when the maximum follow-ups have been asked.
+- Do NOT use next_question for shallow or incorrect answers — use follow_up first.
 
 CONSISTENCY CHECK — before returning your response, verify:
 1. If the transcript contains real content (definitions, examples, explanations), scores must be >= 2 and feedback must NOT say "No answer given".
 2. If scores are >= 4, feedback must be positive and specific.
-3. If nextAction is "next_question", feedback must NOT suggest the candidate should elaborate further (no "needs more depth", "could go deeper").
+3. If nextAction is "next_question", the answer should be strong (level 4-5), the candidate declined to answer, or maximum follow-ups were already asked.
 4. The feedback must reference something specific from the candidate's actual answer.
 
 INTERVIEW TYPE WEIGHTING:

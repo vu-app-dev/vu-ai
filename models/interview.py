@@ -149,6 +149,8 @@ class WSSessionEndMessage(WSMessage):
     cheatEvidence: Optional[CheatEvidence] = None
     mockIndex: Optional[int] = None
     totalMocks: Optional[int] = None
+    closingText: Optional[str] = None
+    closingAudioBase64: Optional[str] = None
 
 
 class WSErrorMessage(WSMessage):

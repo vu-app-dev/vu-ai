@@ -657,20 +657,36 @@ async def _handle_end_session(
     websocket: WebSocket,
     session_id: str,
     session,
+    reason: str = "completed",
 ):
     if session.status == "completed":
         return
 
     result = await session_manager.end_session(session_id)
 
+    if reason == "time_expired":
+        closing_text = (
+            "Thank you for your time. The interview session has ended. "
+            "Your responses have been recorded. We wish you the best of luck!"
+        )
+    else:
+        closing_text = (
+            "Thank you for completing the interview. "
+            "Your responses have been recorded and will be reviewed. "
+            "We wish you the best of luck!"
+        )
+    closing_audio = await _tts(closing_text)
+
     end_msg = WSSessionEndMessage(
         sessionId=session_id,
-        reason="completed",
+        reason=reason,
         performance=result.model_dump(),
         cheat=result.cheat.level,
         cheatEvidence=result.cheat.evidence.model_dump(),
         mockIndex=session.currentMockIndex,
         totalMocks=len(session.mocks),
+        closingText=closing_text,
+        closingAudioBase64=closing_audio,
     )
     await websocket.send_json(end_msg.model_dump())
 
@@ -683,7 +699,7 @@ async def _handle_mock_transition(
 ) -> bool:
     has_next = session_manager.transition_to_next_mock(session_id)
     if not has_next:
-        await _handle_end_session(websocket, session_id, session)
+        await _handle_end_session(websocket, session_id, session, reason=reason)
         return True
 
     mock = session.currentMock
