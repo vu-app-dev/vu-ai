@@ -6,6 +6,13 @@ from pathlib import Path
 try:
     import cv2
     import numpy as np
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+    cv2 = None
+    np = None
+
+try:
     import mediapipe as mp
     from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions, RunningMode
     from mediapipe.tasks.python.core.base_options import BaseOptions
@@ -13,12 +20,11 @@ try:
 except ImportError:
     HAS_MEDIAPIPE = False
     mp = None
-    cv2 = None
-    np = None
 
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "face_landmarker.task"
+MEDIAPIPE_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "face_landmarker.task"
+YUNET_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "face_detection_yunet_2023mar.onnx"
 
 LEFT_EYE_INDICES = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
 RIGHT_EYE_INDICES = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
@@ -49,40 +55,60 @@ class FaceAnalysisResult:
 
 class FaceAnalyzer:
     def __init__(self, model_path: str | None = None):
-        self._detector: FaceLandmarker | None = None
+        self._detector = None
+        self._yunet = None
+        self._backend: str | None = None
         self._initialized = False
         self._init_error: str | None = None
 
-        if not HAS_MEDIAPIPE:
-            self._init_error = "mediapipe not installed"
-            logger.warning("MediaPipe not available, face analysis disabled")
-            return
+        if HAS_MEDIAPIPE and (model_path or MEDIAPIPE_MODEL_PATH).exists():
+            path = model_path or str(MEDIAPIPE_MODEL_PATH)
+            try:
+                options = FaceLandmarkerOptions(
+                    base_options=BaseOptions(model_asset_path=path),
+                    running_mode=RunningMode.IMAGE,
+                    num_faces=2,
+                )
+                self._detector = FaceLandmarker.create_from_options(options)
+                self._backend = "mediapipe"
+                self._initialized = True
+                logger.info("FaceAnalyzer initialized with MediaPipe FaceLandmarker")
+                return
+            except Exception as e:
+                self._init_error = f"MediaPipe init failed: {e}"
+                logger.warning("FaceAnalyzer MediaPipe init failed: %s, trying YuNet fallback", e)
 
-        path = model_path or str(MODEL_PATH)
-        if not Path(path).exists():
-            self._init_error = f"Model file not found: {path}"
-            logger.warning("FaceAnalyzer model not found at %s, face analysis disabled", path)
-            return
+        if HAS_CV2 and YUNET_MODEL_PATH.exists():
+            try:
+                self._yunet = cv2.FaceDetectorYN.create(
+                    str(YUNET_MODEL_PATH), "", (320, 320),
+                    score_threshold=0.6, nms_threshold=0.3, top_k=2,
+                )
+                self._backend = "yunet"
+                self._initialized = True
+                logger.info("FaceAnalyzer initialized with OpenCV YuNet fallback")
+                return
+            except Exception as e:
+                self._init_error = f"YuNet init failed: {e}"
+                logger.warning("FaceAnalyzer YuNet init failed: %s", e)
 
-        try:
-            options = FaceLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=path),
-                running_mode=RunningMode.IMAGE,
-                num_faces=2,
-            )
-            self._detector = FaceLandmarker.create_from_options(options)
-            self._initialized = True
-            logger.info("FaceAnalyzer initialized with MediaPipe Tasks FaceLandmarker")
-        except Exception as e:
-            self._init_error = str(e)
-            logger.warning("FaceAnalyzer init failed: %s", e)
+        if not self._initialized:
+            if not HAS_CV2:
+                self._init_error = "Neither MediaPipe nor OpenCV available"
+            elif not YUNET_MODEL_PATH.exists() and not (model_path or MEDIAPIPE_MODEL_PATH).exists():
+                self._init_error = "No face detection model files found"
+            logger.warning("FaceAnalyzer disabled: %s", self._init_error)
 
     @property
     def available(self) -> bool:
         return self._initialized
 
+    @property
+    def backend(self) -> str | None:
+        return self._backend
+
     def analyze_frame(self, image_bytes: bytes) -> FaceAnalysisResult:
-        if not self._initialized or self._detector is None:
+        if not self._initialized:
             return FaceAnalysisResult()
 
         try:
@@ -91,28 +117,79 @@ class FaceAnalyzer:
             if img is None:
                 return FaceAnalysisResult()
 
-            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            mp_image = mp.Image(data=rgb, image_format=mp.ImageFormat.SRGB)
-            result = self._detector.detect(mp_image)
-
-            if not result.face_landmarks:
-                return FaceAnalysisResult(face_detected=False, num_faces=0)
-
-            num_faces = len(result.face_landmarks)
-            primary = result.face_landmarks[0]
-
-            eye_contact = self._compute_eye_contact(primary, img.shape)
-            gaze_h = self._compute_gaze_horizontal(primary)
-
-            return FaceAnalysisResult(
-                face_detected=True,
-                num_faces=num_faces,
-                eye_contact=eye_contact,
-                gaze_horizontal=gaze_h,
-            )
+            if self._backend == "mediapipe":
+                return self._analyze_mediapipe(img)
+            elif self._backend == "yunet":
+                return self._analyze_yunet(img)
+            return FaceAnalysisResult()
         except Exception as e:
             logger.warning("FaceAnalyzer frame error: %s", e)
             return FaceAnalysisResult()
+
+    def _analyze_mediapipe(self, img) -> FaceAnalysisResult:
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(data=rgb, image_format=mp.ImageFormat.SRGB)
+        result = self._detector.detect(mp_image)
+
+        if not result.face_landmarks:
+            return FaceAnalysisResult(face_detected=False, num_faces=0)
+
+        num_faces = len(result.face_landmarks)
+        primary = result.face_landmarks[0]
+
+        eye_contact = self._compute_eye_contact_mp(primary, img.shape)
+        gaze_h = self._compute_gaze_horizontal_mp(primary)
+
+        return FaceAnalysisResult(
+            face_detected=True,
+            num_faces=num_faces,
+            eye_contact=eye_contact,
+            gaze_horizontal=gaze_h,
+        )
+
+    def _analyze_yunet(self, img) -> FaceAnalysisResult:
+        h, w = img.shape[:2]
+        self._yunet.setInputSize((w, h))
+        _, faces = self._yunet.detect(img)
+
+        if faces is None or len(faces) == 0:
+            return FaceAnalysisResult(face_detected=False, num_faces=0)
+
+        num_faces = len(faces)
+        primary = faces[0]
+
+        right_eye_x, right_eye_y = primary[4], primary[5]
+        left_eye_x, left_eye_y = primary[6], primary[7]
+        nose_x, nose_y = primary[8], primary[9]
+
+        bbox_w = primary[2]
+        bbox_h = primary[3]
+        bbox_x = primary[0]
+
+        eye_dx = abs(right_eye_x - left_eye_x)
+        eye_dy = abs(right_eye_y - left_eye_y)
+        eye_mid_x = (right_eye_x + left_eye_x) / 2.0
+        eye_mid_y = (right_eye_y + left_eye_y) / 2.0
+
+        nose_offset_x = (nose_x - eye_mid_x) / eye_dx if eye_dx > 0 else 0.0
+        nose_offset_y = (nose_y - eye_mid_y) / eye_dy if eye_dy > 0 else 0.0
+
+        horizontal_gaze = abs(nose_offset_x)
+        vertical_gaze = abs(nose_offset_y)
+
+        contact_score = max(0.0, min(100.0, (1.0 - horizontal_gaze * 3.0) * 100.0))
+        contact_score = contact_score * max(0.0, min(1.0, 1.0 - vertical_gaze * 0.5))
+
+        face_width = eye_dx if eye_dx > 0 else 1.0
+        gaze_h = (nose_x - bbox_x - bbox_w / 2.0) / (face_width / 2.0) if face_width > 0 else 0.0
+        gaze_h = max(-1.0, min(1.0, gaze_h))
+
+        return FaceAnalysisResult(
+            face_detected=True,
+            num_faces=num_faces,
+            eye_contact=round(contact_score, 1),
+            gaze_horizontal=round(gaze_h, 3),
+        )
 
     def analyze_base64(self, b64_image: str) -> FaceAnalysisResult:
         try:
@@ -123,7 +200,7 @@ class FaceAnalyzer:
             return FaceAnalysisResult()
 
     @staticmethod
-    def _compute_eye_contact(landmarks, img_shape) -> float | None:
+    def _compute_eye_contact_mp(landmarks, img_shape) -> float | None:
         h, w = img_shape[:2]
 
         def _center(indices):
@@ -159,7 +236,7 @@ class FaceAnalyzer:
         return round(contact_score, 1)
 
     @staticmethod
-    def _compute_gaze_horizontal(landmarks) -> float | None:
+    def _compute_gaze_horizontal_mp(landmarks) -> float | None:
         try:
             nose = landmarks[NOSE_TIP_INDEX]
             left_ear = landmarks[LEFT_EAR_INDEX]
@@ -179,4 +256,5 @@ class FaceAnalyzer:
         if self._detector is not None:
             self._detector.close()
             self._detector = None
-            self._initialized = False
+        self._yunet = None
+        self._initialized = False
