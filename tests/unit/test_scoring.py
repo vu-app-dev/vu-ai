@@ -19,12 +19,12 @@ class TestTranscriptScorer:
         mock_llm = AsyncMock()
         mock_llm.generate_json = AsyncMock(return_value=EvaluateAnswerResponse(
             scores={
-                "communication": 75.0,
-                "problemSolving": 70.0,
-                "technical": 80.0,
-                "clarityOfExplanation": 65.0,
-                "structuredThinking": 72.0,
-                "askingClarifications": 55.0,
+                "communication": 4,
+                "problemSolving": 4,
+                "technical": 4,
+                "clarityOfExplanation": 3,
+                "structuredThinking": 4,
+                "askingClarifications": 3,
             },
             overallComment="Good technical understanding",
             feedback="Nice work!",
@@ -42,7 +42,7 @@ class TestTranscriptScorer:
         assert 0 <= result.technical <= 100
         assert 0 <= result.communication <= 100
         assert result.technical == 80.0
-        assert result.communication == 75.0
+        assert result.communication == 80.0
 
     @pytest.mark.asyncio
     async def test_score_handles_empty_transcript(self):
@@ -84,7 +84,7 @@ class TestTranscriptScorer:
     async def test_score_handles_partial_llm_response(self):
         mock_llm = AsyncMock()
         mock_llm.generate_json = AsyncMock(return_value=EvaluateAnswerResponse(
-            scores={"technical": 70.0},
+            scores={"technical": 4},
         ))
         scorer = TranscriptScorer(llm=mock_llm)
         result = await scorer.score(
@@ -92,16 +92,72 @@ class TestTranscriptScorer:
             transcript="Closures...",
             mock_type="TECHNICAL",
         )
-        assert result.technical == 70.0
+        assert result.technical == 80.0
         assert result.communication == 0.0
+
+    @pytest.mark.asyncio
+    async def test_score_with_active_dimensions(self):
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=EvaluateAnswerResponse(
+            scores={
+                "communication": 4,
+                "technical": 5,
+                "clarityOfExplanation": 3,
+                "problemSolving": 4,
+            },
+            overallComment="Good",
+            feedback="Nice",
+            nextAction="next_question",
+        ))
+        scorer = TranscriptScorer(llm=mock_llm)
+        result = await scorer.score(
+            question="What is gradient descent?",
+            transcript="Gradient descent is an optimization algorithm...",
+            mock_type="TECHNICAL",
+            active_dimensions=["technical", "communication", "clarityOfExplanation"],
+        )
+        assert result.technical == 100.0
+        assert result.communication == 80.0
+        assert result.clarityOfExplanation == 60.0
+        assert result.problemSolving == 0.0
+        assert result.structuredThinking == 0.0
+        assert result.askingClarifications == 0.0
+
+    @pytest.mark.asyncio
+    async def test_score_with_none_active_dimensions_scores_all(self):
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=EvaluateAnswerResponse(
+            scores={
+                "communication": 4,
+                "problemSolving": 3,
+                "technical": 4,
+                "clarityOfExplanation": 3,
+                "structuredThinking": 4,
+                "askingClarifications": 3,
+            },
+            overallComment="Good",
+            feedback="Nice",
+            nextAction="next_question",
+        ))
+        scorer = TranscriptScorer(llm=mock_llm)
+        result = await scorer.score(
+            question="Explain React hooks",
+            transcript="React hooks let you use state...",
+            mock_type="TECHNICAL",
+            active_dimensions=None,
+        )
+        assert result.communication == 80.0
+        assert result.problemSolving == 60.0
+        assert result.technical == 80.0
+        assert result.structuredThinking == 80.0
 
 
 class TestScoreAggregatorWeightedAverage:
     def test_transcript_only(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores(
-            communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            communication=80, problemSolving=60, technical=80,
+            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
         )
         avg = agg.compute_weighted_average(transcript, audio=None, video=None)
         assert 0 <= avg <= 100
@@ -110,8 +166,8 @@ class TestScoreAggregatorWeightedAverage:
     def test_with_all_scores(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores(
-            communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            communication=80, problemSolving=60, technical=80,
+            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
         )
         audio = AudioScores(confidence=78, speaking=82)
         video = VideoScores(eyeContact=70)
@@ -122,8 +178,8 @@ class TestScoreAggregatorWeightedAverage:
     def test_null_video_redistributes(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores(
-            communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            communication=80, problemSolving=60, technical=80,
+            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
         )
         audio = AudioScores(confidence=78, speaking=82)
         avg_with_video = agg.compute_weighted_average(transcript, audio, VideoScores(eyeContact=70))
@@ -144,11 +200,11 @@ class TestScoreAggregatorWeightedAverage:
         )
         agg = ScoreAggregator(weights=custom_weights)
         transcript = TranscriptScores(
-            communication=80, problemSolving=70, technical=100,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            communication=80, problemSolving=60, technical=100,
+            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
         )
         avg = agg.compute_weighted_average(transcript, audio=None, video=None)
-        assert avg == 86.35
+        assert avg == 85.0
 
 
 class TestScoreAggregatorLLMAdjustment:
@@ -200,8 +256,8 @@ class TestScoreAggregatorPerformance:
     def test_compute_performance_with_adjustment(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores(
-            communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            communication=80, problemSolving=60, technical=80,
+            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
         )
         adjustment = LLMAdjustment(adjustment=5.0, reason="Strong", confidence="medium")
         result = agg.compute_performance(transcript, llm_adjustment=adjustment)
@@ -210,8 +266,8 @@ class TestScoreAggregatorPerformance:
     def test_compute_performance_without_adjustment(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores(
-            communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            communication=80, problemSolving=60, technical=80,
+            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
         )
         result = agg.compute_performance(transcript)
         assert result > 0

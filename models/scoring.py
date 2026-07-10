@@ -107,8 +107,9 @@ class PerformanceResult(BaseModel):
 
 
 SCORE_RUBRIC = {
-    (0, 30): "Poor — Fundamentally lacking in this area",
-    (31, 60): "Acceptable — Covers basics but has notable gaps",
+    (0, 20): "Poor — Fundamentally lacking in this area",
+    (21, 40): "Below Average — Attempted but with major gaps",
+    (41, 60): "Acceptable — Covers basics but has notable gaps",
     (61, 80): "Good — Solid demonstration with minor weaknesses",
     (81, 100): "Excellent — Exceptional, thorough, and insightful",
 }

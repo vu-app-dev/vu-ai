@@ -105,10 +105,10 @@ class TestSessionManagerIntegration:
         from models.scoring import TranscriptScores, AudioScores
         answer = session.answers[0]
         answer.aiFeedback = "Good"
-        answer.score = 75.0
+        answer.score = 80.0
         answer.transcriptScores = TranscriptScores(
-            communication=75.0, problemSolving=70.0, technical=80.0,
-            clarityOfExplanation=65.0, structuredThinking=72.0, askingClarifications=68.0,
+            communication=80.0, problemSolving=60.0, technical=80.0,
+            clarityOfExplanation=60.0, structuredThinking=80.0, askingClarifications=60.0,
         )
         answer.audioScores = AudioScores(confidence=70.0, speaking=75.0)
 

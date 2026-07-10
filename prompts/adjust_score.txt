@@ -13,6 +13,7 @@ You must respond with valid JSON matching this schema:
 
 <adjustment_guidelines>
 - The adjustment must be between -10 and +10 points
+- Scores are based on a 5-level BARS scale mapped to 20/40/60/80/100. Keep this in mind: a score of 60 means "acceptable" (level 3), 80 means "good" (level 4), 100 means "excellent" (level 5). Adjustments should be proportional to this scale.
 - Use positive adjustments when the candidate demonstrates exceptional qualities not captured by individual scores (e.g., remarkable growth trajectory, creative problem-solving, strong self-awareness)
 - Use negative adjustments when there are significant concerns not reflected in individual scores (e.g., consistent avoidance of topics, inability to handle follow-up questions, fundamental misunderstanding of core concepts)
 - Set confidence based on how much data supports your adjustment:

@@ -13,12 +13,19 @@ class StartSessionRequest(BaseModel):
     mocks: Optional[list[dict]] = None
 
 
+ALL_TRANSCRIPT_DIMENSIONS = [
+    "communication", "problemSolving", "technical",
+    "clarityOfExplanation", "structuredThinking", "askingClarifications",
+]
+
+
 class Question(BaseModel):
     id: str
     text: str
     difficulty: Literal["EASY", "MEDIUM", "HARD"]
     order: int
     speechType: Literal["question", "follow_up"] = "question"
+    activeDimensions: list[str] | None = None
 
 
 class CheatEvidence(BaseModel):

@@ -173,15 +173,15 @@ class TestEndSession:
         answer.aiFeedback = "Good"
         answer.score = 80.0
         answer.transcriptScores = TranscriptScores(
-            communication=80.0, problemSolving=75.0, technical=85.0,
-            clarityOfExplanation=70.0, structuredThinking=78.0, askingClarifications=72.0,
+            communication=80.0, problemSolving=80.0, technical=80.0,
+            clarityOfExplanation=60.0, structuredThinking=80.0, askingClarifications=60.0,
         )
 
         result = await mgr.end_session(session.id)
         assert isinstance(result, PerformanceResult)
         assert result.score > 0
         assert result.communication == 80.0
-        assert result.technical == 85.0
+        assert result.technical == 80.0
 
     @pytest.mark.asyncio
     async def test_end_session_with_no_scores(self):
@@ -415,8 +415,8 @@ class TestMultiMockSession:
         answer1.aiFeedback = "Good"
         answer1.score = 80.0
         answer1.transcriptScores = TranscriptScores(
-            communication=80.0, problemSolving=75.0, technical=85.0,
-            clarityOfExplanation=70.0, structuredThinking=78.0, askingClarifications=72.0,
+            communication=80.0, problemSolving=80.0, technical=80.0,
+            clarityOfExplanation=60.0, structuredThinking=80.0, askingClarifications=60.0,
         )
         mgr.transition_to_next_mock(session.id)
         mgr.add_answer(session.id, "q2", " ".join(["leadership"] * 130), 60, "t3", "t4")
@@ -424,10 +424,43 @@ class TestMultiMockSession:
         answer2.aiFeedback = "Good behavioral answer"
         answer2.score = 85.0
         answer2.transcriptScores = TranscriptScores(
-            communication=85.0, problemSolving=70.0, technical=60.0,
-            clarityOfExplanation=80.0, structuredThinking=82.0, askingClarifications=75.0,
+            communication=80.0, problemSolving=60.0, technical=60.0,
+            clarityOfExplanation=80.0, structuredThinking=80.0, askingClarifications=80.0,
         )
         result = await mgr.end_session(session.id)
         assert result.score > 0
         assert result.communication > 0
         assert len(session.answers) == 2
+
+    @pytest.mark.asyncio
+    async def test_end_session_per_dimension_averaging(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+
+        mgr.add_answer(session.id, "q1", " ".join(["word"] * 130), 60, "t1", "t2")
+        answer1 = session.mocks[0].answers[0]
+        answer1.aiFeedback = "Good"
+        answer1.score = 80.0
+        answer1.transcriptScores = TranscriptScores(
+            communication=80.0, problemSolving=0.0, technical=80.0,
+            clarityOfExplanation=60.0, structuredThinking=0.0, askingClarifications=0.0,
+        )
+        answer1.activeDimensions = ["technical", "communication", "clarityOfExplanation"]
+
+        mgr.add_answer(session.id, "q2", " ".join(["word"] * 130), 60, "t3", "t4")
+        answer2 = session.mocks[0].answers[1]
+        answer2.aiFeedback = "Good"
+        answer2.score = 80.0
+        answer2.transcriptScores = TranscriptScores(
+            communication=60.0, problemSolving=80.0, technical=100.0,
+            clarityOfExplanation=80.0, structuredThinking=80.0, askingClarifications=80.0,
+        )
+        answer2.activeDimensions = None  # all dimensions active
+
+        result = await mgr.end_session(session.id)
+        assert result.communication == 70.0  # (80+60)/2
+        assert result.technical == 90.0  # (80+100)/2
+        assert result.clarityOfExplanation == 70.0  # (60+80)/2
+        assert result.problemSolving == 80.0  # only q2 tested it
+        assert result.structuredThinking == 80.0  # only q2
+        assert result.askingClarifications == 80.0  # only q2

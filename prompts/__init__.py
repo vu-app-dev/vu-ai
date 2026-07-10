@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from prompts.bars_anchors import get_bars_anchors
 from prompts.persona import get_persona_instruction, MOCK_TYPE_TECHNICAL, VALID_MOCK_TYPES
 
 PROMPTS_DIR = Path(__file__).parent
@@ -26,6 +27,16 @@ def format_prompt(template_name: str, **kwargs) -> str:
         if mock_type not in VALID_MOCK_TYPES:
             mock_type = MOCK_TYPE_TECHNICAL
         kwargs["persona_instruction"] = get_persona_instruction(mock_type)
+        active_dims = kwargs.pop("active_dimensions", None)
+        kwargs["bars_anchors"] = get_bars_anchors(mock_type, active_dimensions=active_dims)
+        if active_dims is not None:
+            dim_labels = ", ".join(active_dims)
+            kwargs["active_dimensions"] = (
+                f"ACTIVE DIMENSIONS FOR THIS QUESTION: {dim_labels}\n"
+                f"Only score these dimensions. For any dimension NOT listed above, return score 0."
+            )
+        else:
+            kwargs["active_dimensions"] = "Score ALL six dimensions for this question."
         kwargs["mock_type"] = mock_type
 
     if "cv_skills" in kwargs and isinstance(kwargs["cv_skills"], list):

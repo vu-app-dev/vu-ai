@@ -28,6 +28,7 @@ class _QuestionItem(BaseModel):
     text: str
     difficulty: str = "MEDIUM"
     order: int = 1
+    activeDimensions: list[str] | None = None
 
 
 class _GenerateQuestionsResponse(BaseModel):
@@ -84,6 +85,7 @@ class QuestionGenerator:
                         difficulty=q.difficulty,
                         order=q.order,
                         speechType="question",
+                        activeDimensions=q.activeDimensions,
                     )
                     for q in response.questions
                 ]
@@ -168,42 +170,50 @@ class QuestionGenerator:
                 ))
             return questions
 
-        # Generate generic questions based on type
+        _ALL = None
+        _KNOWLEDGE = ["technical", "communication", "clarityOfExplanation"]
+        _SCENARIO = ["technical", "communication", "clarityOfExplanation", "problemSolving", "structuredThinking", "askingClarifications"]
+        _COMPARISON = ["technical", "communication", "clarityOfExplanation", "structuredThinking"]
+        _BEHAVIORAL = ["communication", "clarityOfExplanation", "structuredThinking"]
+
         templates = {
             "TECHNICAL": [
-                "Tell me about your experience and what interests you about this role.",
-                "Can you walk me through a challenging technical problem you've solved?",
-                "How do you approach debugging a complex issue in production?",
-                "Explain a technical concept you're passionate about as if teaching a beginner.",
-                "What trade-offs do you consider when choosing between different technologies?",
+                ("Tell me about your experience and what interests you about this role.", _BEHAVIORAL),
+                ("Can you walk me through a challenging technical problem you've solved?", _SCENARIO),
+                ("How do you approach debugging a complex issue in production?", _SCENARIO),
+                ("Explain a technical concept you're passionate about as if teaching a beginner.", _KNOWLEDGE),
+                ("What trade-offs do you consider when choosing between different technologies?", _COMPARISON),
             ],
             "BEHAVIORAL": [
-                "Tell me about a time you had to work with a difficult team member.",
-                "Describe a situation where you had to adapt to a significant change.",
-                "How do you handle tight deadlines and competing priorities?",
-                "Can you give an example of when you took initiative beyond your role?",
-                "Tell me about a failure and what you learned from it.",
+                ("Tell me about a time you had to work with a difficult team member.", _BEHAVIORAL),
+                ("Describe a situation where you had to adapt to a significant change.", _BEHAVIORAL),
+                ("How do you handle tight deadlines and competing priorities?", _SCENARIO),
+                ("Can you give an example of when you took initiative beyond your role?", _BEHAVIORAL),
+                ("Tell me about a failure and what you learned from it.", _BEHAVIORAL),
             ],
             "CODING": [
-                "How would you approach designing a system that needs to handle millions of requests?",
-                "Explain the difference between time complexity and space complexity with an example.",
-                "How would you optimize a slow database query?",
-                "Describe how you would implement a caching strategy.",
-                "What's your approach to writing testable code?",
+                ("How would you approach designing a system that needs to handle millions of requests?", _SCENARIO),
+                ("Explain the difference between time complexity and space complexity with an example.", _KNOWLEDGE),
+                ("How would you optimize a slow database query?", _SCENARIO),
+                ("Describe how you would implement a caching strategy.", _SCENARIO),
+                ("What's your approach to writing testable code?", _COMPARISON),
             ],
         }
         defaults = [
-            "Tell me about your experience and what interests you about this role.",
-            "Can you describe a challenging project you've worked on?",
-            "Where do you see yourself growing in this field?",
-            "What's something you've learned recently that excited you?",
-            "How do you stay current with developments in your field?",
+            ("Tell me about your experience and what interests you about this role.", _BEHAVIORAL),
+            ("Can you describe a challenging project you've worked on?", _SCENARIO),
+            ("Where do you see yourself growing in this field?", _BEHAVIORAL),
+            ("What's something you've learned recently that excited you?", _KNOWLEDGE),
+            ("How do you stay current with developments in your field?", _KNOWLEDGE),
         ]
-        question_texts = templates.get(mock_type, defaults)
+        question_entries = templates.get(mock_type, defaults)
 
         return [
-            Question(id=f"q{i}", text=text, difficulty=difficulty, order=i, speechType="question")
-            for i, text in enumerate(question_texts, 1)
+            Question(
+                id=f"q{i}", text=text, difficulty=difficulty, order=i,
+                speechType="question", activeDimensions=dims,
+            )
+            for i, (text, dims) in enumerate(question_entries, 1)
         ]
 
     @staticmethod

@@ -409,11 +409,13 @@ async def _handle_answer(
     # Find the actual question text + its index from the session
     question_text = transcript[:200] if transcript else "No question context"
     answered_idx = None
+    active_dimensions = None
     for i, q_data in enumerate(session.questionsAsked):
         q = _question_dict(q_data)
         if q.get("id") == question_id:
             question_text = q.get("text", question_text)
             answered_idx = i
+            active_dimensions = q.get("activeDimensions")
             break
 
     try:
@@ -450,6 +452,7 @@ async def _handle_answer(
             total_mocks=total_mocks,
             asked_questions=asked_questions,
             conversation_history=conversation_history,
+            active_dimensions=active_dimensions,
         )
     except Exception:
         scores = TranscriptScores()
@@ -518,6 +521,7 @@ async def _handle_answer(
     if current_answer:
         current_answer.transcriptScores = scores
         current_answer.audioScores = audio_scores
+        current_answer.activeDimensions = active_dimensions
 
     acknowledgement = WSAcknowledgementMessage(
         sessionId=session_id,
@@ -545,6 +549,7 @@ async def _handle_answer(
                     difficulty=follow_up.get("difficulty", difficulty),
                     order=fu_idx + 1,
                     speechType="follow_up",
+                    activeDimensions=active_dimensions,
                 )
                 session.questionsAsked.insert(fu_idx, follow_up_question.model_dump())
                 session.currentQuestionIndex = fu_idx

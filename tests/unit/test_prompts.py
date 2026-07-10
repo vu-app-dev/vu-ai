@@ -84,8 +84,8 @@ class TestScoreRubric:
         prompt = format_prompt("evaluate_answer", question="Explain React",
                                transcript="React is a library", duration_seconds=60,
                                mock_type="TECHNICAL", difficulty="MEDIUM", order=1)
-        assert "0-30" in prompt or "Poor" in prompt
-        assert "81-100" in prompt or "Excellent" in prompt
+        assert "1-5" in prompt or "BARS" in prompt
+        assert "Excellent" in prompt or "level" in prompt.lower()
 
     def test_cv_prompt_includes_score_rubric(self):
         prompt = format_prompt("analyze_cv",
@@ -196,3 +196,40 @@ class TestListFormatting:
                                topics=["frontend"], estimated_time_minutes=30,
                                num_questions=3, cv_skills=["JavaScript"])
         assert "None yet" in prompt or "first set" in prompt
+
+
+class TestActiveDimensions:
+    def test_evaluate_prompt_all_dimensions_by_default(self):
+        prompt = format_prompt("evaluate_answer", question="Explain React",
+                               transcript="React is a library", duration_seconds=60,
+                               mock_type="TECHNICAL", difficulty="MEDIUM", order=1)
+        assert "Score ALL six dimensions" in prompt
+
+    def test_evaluate_prompt_with_active_dimensions(self):
+        dims = ["technical", "communication", "clarityOfExplanation"]
+        prompt = format_prompt("evaluate_answer", question="Explain React",
+                               transcript="React is a library", duration_seconds=60,
+                               mock_type="TECHNICAL", difficulty="MEDIUM", order=1,
+                               active_dimensions=dims)
+        assert "ACTIVE DIMENSIONS" in prompt
+        assert "technical" in prompt
+        assert "communication" in prompt
+        assert "clarityOfExplanation" in prompt
+        assert "Only score these dimensions" in prompt
+
+    def test_bars_anchors_filtered_by_active_dimensions(self):
+        from prompts.bars_anchors import get_bars_anchors
+        dims = ["technical", "communication"]
+        anchors = get_bars_anchors("TECHNICAL", active_dimensions=dims)
+        assert "Technical Knowledge (technical)" in anchors
+        assert "Communication (communication)" in anchors
+        assert "Problem Solving (problemSolving)" not in anchors
+        assert "Structured Thinking (structuredThinking)" not in anchors
+
+    def test_bars_anchors_all_when_none(self):
+        from prompts.bars_anchors import get_bars_anchors
+        anchors = get_bars_anchors("TECHNICAL", active_dimensions=None)
+        assert "Technical Knowledge (technical)" in anchors
+        assert "Problem Solving (problemSolving)" in anchors
+        assert "Structured Thinking (structuredThinking)" in anchors
+        assert "Critical Thinking (askingClarifications)" in anchors

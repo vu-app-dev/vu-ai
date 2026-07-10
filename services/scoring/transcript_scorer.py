@@ -20,6 +20,13 @@ class EvaluateAnswerResponse(BaseModel):
     followUpQuestion: dict | None = None
 
 
+def _bars_to_100(score: float) -> float:
+    if score <= 0:
+        return 0.0
+    clamped = max(1, min(5, score))
+    return clamped * 20.0
+
+
 class TranscriptScorer:
     def __init__(self, llm: LLMService | None = None):
         self._llm = llm or LLMService()
@@ -37,6 +44,7 @@ class TranscriptScorer:
         total_mocks: int = 1,
         asked_questions: list[str] | None = None,
         conversation_history: str = "",
+        active_dimensions: list[str] | None = None,
     ) -> tuple[TranscriptScores, EvaluateAnswerResponse | None]:
         if not transcript or not transcript.strip():
             logger.warning("Empty transcript received, returning zero scores")
@@ -61,19 +69,26 @@ class TranscriptScorer:
                 total_mocks=total_mocks,
                 asked_questions=asked_list,
                 conversation_history=conversation_history,
+                active_dimensions=active_dimensions,
             )
 
             response = await self._llm.generate_json(prompt, EvaluateAnswerResponse)
 
             if response and response.scores:
-                scores = TranscriptScores(
-                    communication=response.scores.get("communication", 0.0),
-                    problemSolving=response.scores.get("problemSolving", 0.0),
-                    technical=response.scores.get("technical", 0.0),
-                    clarityOfExplanation=response.scores.get("clarityOfExplanation", 0.0),
-                    structuredThinking=response.scores.get("structuredThinking", 0.0),
-                    askingClarifications=response.scores.get("askingClarifications", 0.0),
-                )
+                all_dims = [
+                    "communication", "problemSolving", "technical",
+                    "clarityOfExplanation", "structuredThinking", "askingClarifications",
+                ]
+                score_vals = {}
+                for dim in all_dims:
+                    if active_dimensions is not None and dim not in active_dimensions:
+                        score_vals[dim] = 0.0
+                    else:
+                        score_vals[dim] = _bars_to_100(response.scores.get(dim, 0.0))
+
+                scores = TranscriptScores(**score_vals)
+                if response.nextAction == "clarify":
+                    scores = TranscriptScores()
                 return scores, response
 
         except Exception as e:
@@ -94,6 +109,7 @@ class TranscriptScorer:
         total_mocks: int = 1,
         asked_questions: list[str] | None = None,
         conversation_history: str = "",
+        active_dimensions: list[str] | None = None,
     ) -> TranscriptScores:
         scores, _ = await self.evaluate(
             question=question,
@@ -107,5 +123,6 @@ class TranscriptScorer:
             total_mocks=total_mocks,
             asked_questions=asked_questions,
             conversation_history=conversation_history,
+            active_dimensions=active_dimensions,
         )
         return scores

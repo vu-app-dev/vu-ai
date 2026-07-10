@@ -73,6 +73,20 @@ class TestQuestion:
         with pytest.raises(ValidationError):
             Question(id="q1", text="Test", difficulty="MEDIUM", order=1, speechType="announcement")
 
+    def test_active_dimensions_default_none(self):
+        q = Question(id="q1", text="Test", difficulty="MEDIUM", order=1)
+        assert q.activeDimensions is None
+
+    def test_active_dimensions_with_values(self):
+        dims = ["technical", "communication", "clarityOfExplanation"]
+        q = Question(id="q1", text="Test", difficulty="MEDIUM", order=1, activeDimensions=dims)
+        assert q.activeDimensions == dims
+        assert len(q.activeDimensions) == 3
+
+    def test_active_dimensions_empty_list(self):
+        q = Question(id="q1", text="Test", difficulty="MEDIUM", order=1, activeDimensions=[])
+        assert q.activeDimensions == []
+
 
 class TestCheatClassification:
     def test_clean(self):
@@ -314,14 +328,17 @@ class TestScoringModels:
 
     def test_score_rubric(self):
         assert "Poor" in describe_score(20)
+        assert "Below Average" in describe_score(40)
         assert "Acceptable" in describe_score(50)
         assert "Good" in describe_score(70)
         assert "Excellent" in describe_score(90)
 
     def test_describe_score_boundaries(self):
         assert describe_score(0).startswith("Poor")
-        assert describe_score(30).startswith("Poor")
-        assert describe_score(31).startswith("Acceptable")
+        assert describe_score(20).startswith("Poor")
+        assert describe_score(21).startswith("Below Average")
+        assert describe_score(40).startswith("Below Average")
+        assert describe_score(41).startswith("Acceptable")
         assert describe_score(60).startswith("Acceptable")
         assert describe_score(61).startswith("Good")
         assert describe_score(80).startswith("Good")

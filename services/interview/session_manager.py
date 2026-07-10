@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from models.interview import CheatClassification, CheatEvidence
+from models.interview import CheatClassification, CheatEvidence, ALL_TRANSCRIPT_DIMENSIONS
 from models.scoring import AudioScores, PerformanceResult, TranscriptScores, VideoScores
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class Answer:
     transcriptScores: TranscriptScores | None = None
     audioScores: AudioScores | None = None
     mockIndex: int = 0
+    activeDimensions: list[str] | None = None
 
 
 @dataclass
@@ -340,16 +341,18 @@ class SessionManager:
 
         scored_answers = [a for a in session.answers if a.aiFeedback]
 
-        transcript_scores_list = [a.transcriptScores for a in scored_answers if a.transcriptScores is not None]
-        if transcript_scores_list:
-            avg_transcript = TranscriptScores(
-                communication=sum(s.communication for s in transcript_scores_list) / len(transcript_scores_list),
-                problemSolving=sum(s.problemSolving for s in transcript_scores_list) / len(transcript_scores_list),
-                technical=sum(s.technical for s in transcript_scores_list) / len(transcript_scores_list),
-                clarityOfExplanation=sum(s.clarityOfExplanation for s in transcript_scores_list) / len(transcript_scores_list),
-                structuredThinking=sum(s.structuredThinking for s in transcript_scores_list) / len(transcript_scores_list),
-                askingClarifications=sum(s.askingClarifications for s in transcript_scores_list) / len(transcript_scores_list),
-            )
+        if scored_answers:
+            dim_values: dict[str, list[float]] = {dim: [] for dim in ALL_TRANSCRIPT_DIMENSIONS}
+            for a in scored_answers:
+                if a.transcriptScores is None:
+                    continue
+                for dim in ALL_TRANSCRIPT_DIMENSIONS:
+                    if a.activeDimensions is None or dim in a.activeDimensions:
+                        dim_values[dim].append(getattr(a.transcriptScores, dim))
+            avg_transcript = TranscriptScores(**{
+                dim: (sum(vals) / len(vals) if vals else 0.0)
+                for dim, vals in dim_values.items()
+            })
         else:
             avg_transcript = TranscriptScores()
 
