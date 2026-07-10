@@ -84,10 +84,11 @@ Duration: {duration_seconds} seconds
 
 <evaluation_guidelines>
 FEEDBACK FORMAT:
-- Feedback MUST be 3-5 words spoken aloud via text-to-speech during the interview.
-- The feedback should be specific to what the candidate said — not generic praise or criticism.
-- Good examples: "Clear supervised learning breakdown." / "Strong regularization coverage." / "Missed key trade-offs." / "Too vague on implementation." / "Thorough algorithm comparison."
-- BAD examples (too vague, do NOT use these): "Good explanation." / "Solid answer." / "Needs more depth." / "Nice." / "Well done." / "Good job."
+- Feedback should be a brief internal assessment note (3-10 words).
+- Specific to what the candidate said — not generic.
+- This is NOT spoken to the candidate. It is recorded for the recruiter's review.
+- Good examples: "Clear supervised learning breakdown." / "Missed key trade-offs." / "Too vague on implementation."
+- BAD examples (too vague): "Good explanation." / "Solid answer." / "Nice." / "Well done."
 - The feedback must match the scores. If scores are high (4-5), feedback should be positive and specific. If scores are low (1-2), feedback should name what was missing.
 - NEVER say "No answer given" unless the transcript is actually empty or the candidate explicitly said "I don't know" / "I can't answer".
 

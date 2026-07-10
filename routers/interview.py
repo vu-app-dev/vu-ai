@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/interview", tags=["interview"])
 
-MAX_FOLLOWUPS_PER_MOCK = 2
-MAX_FOLLOWUPS_PER_QUESTION = 1
+MAX_FOLLOWUPS_PER_MOCK = 6
+MAX_FOLLOWUPS_PER_QUESTION = 2
 MOCK_GRACE_SECONDS = 30
 
 session_manager = SessionManager(backend_client=backend_client)
@@ -522,14 +522,6 @@ async def _handle_answer(
         current_answer.transcriptScores = scores
         current_answer.audioScores = audio_scores
         current_answer.activeDimensions = active_dimensions
-
-    acknowledgement = WSAcknowledgementMessage(
-        sessionId=session_id,
-        text=feedback_text,
-        speechType="feedback",
-        audioBase64=await _tts(feedback_text),
-    )
-    await websocket.send_json(acknowledgement.model_dump())
 
     if next_action == "follow_up" and follow_up is not None:
         fu_text = follow_up.get("text", "")
