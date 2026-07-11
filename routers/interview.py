@@ -25,7 +25,7 @@ from models.scoring import TranscriptScores
 from services.interview.cheat_detector import CheatDetector
 from services.interview.question_similarity import is_similar_question, question_similarity
 from services.interview.question_generator import QuestionGenerator
-from services.interview.session_manager import SessionManager
+from services.interview.session_manager import DuplicateAnswerError, SessionManager, StaleQuestionError
 from services.scoring.audio_scorer import AudioScorer
 from services.scoring.score_aggregator import ScoreAggregator
 from services.cv.cv_analyzer import CvAnalyzer
@@ -37,10 +37,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/interview", tags=["interview"])
 
-MAX_FOLLOWUPS_PER_MOCK = 6
-MAX_FOLLOWUPS_PER_QUESTION = 2
+MAX_FOLLOWUPS_PER_MOCK = 2
+MAX_FOLLOWUPS_PER_QUESTION = 1
 MOCK_GRACE_SECONDS = 30
 FINAL_QUESTION_RESERVE_SECONDS = 60
+FOLLOWUP_RESERVE_SECONDS = 120
 INTRO_QUESTION_ID = "intro"
 INTRO_QUESTION_TEXT = (
     "To begin, please introduce yourself and briefly share your background, "
@@ -122,7 +123,12 @@ def _build_conversation_history(session, current_question_id: str) -> str:
     if mock is None or not mock.answers:
         return "None — this is the first question."
 
-    recent = mock.answers[-3:]
+    recent = [
+        answer for answer in mock.answers
+        if answer.questionId != current_question_id
+    ][-3:]
+    if not recent:
+        return "None — this is the first question."
 
     pairs = []
     for ans in recent:
@@ -162,6 +168,69 @@ def _all_question_texts(session) -> list[str]:
     return texts
 
 
+def _question_for_answer(session, question_id: str) -> dict:
+    for q_data in session.questionsAsked:
+        q = _question_dict(q_data)
+        if q.get("id") == question_id:
+            return q
+    return {}
+
+
+def _answered_question_ids(session) -> set[str]:
+    mock = session.currentMock
+    if mock is None:
+        return set()
+    return {answer.questionId for answer in mock.answers}
+
+
+def _used_topic_tags(session) -> set[str]:
+    used: set[str] = set()
+    for question_id in _answered_question_ids(session):
+        tag = (_question_for_answer(session, question_id).get("topicTag") or "").strip().lower()
+        if tag:
+            used.add(tag)
+    return used
+
+
+def _to_question(q_data) -> Question:
+    return Question(**q_data) if isinstance(q_data, dict) else q_data
+
+
+def _select_next_question(session, start_index: int = 0) -> tuple[int, Question] | None:
+    answered_ids = _answered_question_ids(session)
+    used_topics = _used_topic_tags(session)
+    candidates: list[tuple[int, Question]] = []
+    total_questions = len(session.questionsAsked)
+    start_index = max(0, min(start_index, total_questions))
+    scan_order = list(range(start_index, total_questions)) + list(range(0, start_index))
+
+    for idx in scan_order:
+        question = _to_question(session.questionsAsked[idx])
+        if question.id in answered_ids:
+            continue
+
+        already_planned = any(
+            is_similar_question(_question_dict(prev).get("text", ""), question.text)
+            and _question_dict(prev).get("id") != question.id
+            for prev in session.questionsAsked[:idx]
+        )
+        if already_planned:
+            logger.info("Skipping similar planned question %s: %s", question.id, question.text)
+            continue
+
+        candidates.append((idx, question))
+
+    if not candidates:
+        return None
+
+    for idx, question in candidates:
+        topic = (question.topicTag or "").strip().lower()
+        if topic and topic not in used_topics:
+            return idx, question
+
+    return candidates[0]
+
+
 def _build_intro_question() -> Question:
     return Question(
         id=INTRO_QUESTION_ID,
@@ -185,6 +254,11 @@ def _mock_remaining_seconds(session) -> int | None:
 def _should_stop_asking(session) -> bool:
     remaining = _mock_remaining_seconds(session)
     return remaining is not None and remaining <= FINAL_QUESTION_RESERVE_SECONDS
+
+
+def _should_skip_followup(session) -> bool:
+    remaining = _mock_remaining_seconds(session)
+    return remaining is not None and remaining <= FOLLOWUP_RESERVE_SECONDS
 
 
 def _dedupe_questions(
@@ -270,6 +344,30 @@ async def _finish_current_mock_or_session(
         return await _handle_mock_transition(websocket, session_id, session, reason)
     await _handle_end_session(websocket, session_id, session, reason=reason)
     return True
+
+
+async def _send_next_question_or_finish(
+    websocket: WebSocket,
+    session_id: str,
+    session,
+    start_index: int,
+    reason: str = "completed",
+) -> bool:
+    if _should_stop_asking(session):
+        return await _finish_current_mock_or_session(
+            websocket, session_id, session, reason=reason,
+        )
+
+    selected = _select_next_question(session, start_index)
+    if selected is not None:
+        next_idx, next_question = selected
+        session.currentQuestionIndex = next_idx
+        await _send_question_message(websocket, session_id, next_question)
+        return False
+
+    return await _finish_current_mock_or_session(
+        websocket, session_id, session, reason=reason,
+    )
 
 
 FALLBACK_MOCK_DATA = {
@@ -603,7 +701,7 @@ async def _handle_answer(
             session=session,
         )
 
-    # Find the actual question text + its index from the session
+    # Find the actual question text + its index from the session.
     question_text = transcript[:200] if transcript else "No question context"
     answered_idx = None
     active_dimensions = None
@@ -615,10 +713,37 @@ async def _handle_answer(
             active_dimensions = q.get("activeDimensions")
             break
 
+    if answered_idx is None:
+        await websocket.send_json(WSErrorMessage(
+            sessionId=session_id,
+            code="INVALID_MESSAGE",
+            message="Answer ignored because the question is not active in this interview session.",
+            retryable=False,
+        ).model_dump())
+        return False
+
     try:
-        session_manager.add_answer(
+        current_answer = session_manager.add_answer(
             session_id, question_id, transcript, duration_seconds, started_at, ended_at
         )
+    except DuplicateAnswerError:
+        logger.info("Duplicate answer ignored for session %s question %s", session_id, question_id)
+        await websocket.send_json(WSErrorMessage(
+            sessionId=session_id,
+            code="INVALID_MESSAGE",
+            message="Duplicate answer ignored because this question was already submitted.",
+            retryable=False,
+        ).model_dump())
+        return False
+    except StaleQuestionError as e:
+        logger.info("Stale answer ignored for session %s question %s: %s", session_id, question_id, e)
+        await websocket.send_json(WSErrorMessage(
+            sessionId=session_id,
+            code="INVALID_MESSAGE",
+            message="Stale answer ignored because the interview has already moved to another question.",
+            retryable=False,
+        ).model_dump())
+        return False
     except ValueError:
         await websocket.send_json(WSErrorMessage(
             sessionId=session_id,
@@ -686,32 +811,15 @@ async def _handle_answer(
         areas_to_improve = []
         next_action = "next_question"
         follow_up = None
-        current_answer = next((a for a in session.answers if a.questionId == question_id), None)
-        if current_answer:
-            current_answer.transcriptScores = None
-            current_answer.audioScores = audio_scores
-            current_answer.activeDimensions = active_dimensions
-        if _should_stop_asking(session):
-            return await _finish_current_mock_or_session(
-                websocket, session_id, session, reason="completed",
-            )
-        current_idx = answered_idx if answered_idx is not None else session.currentQuestionIndex
-        next_idx = current_idx + 1
-        while next_idx < len(session.questionsAsked):
-            next_q_data = session.questionsAsked[next_idx]
-            nq = Question(**next_q_data) if isinstance(next_q_data, dict) else next_q_data
-            if any(
-                is_similar_question(_question_dict(q).get("text", ""), nq.text)
-                and _question_dict(q).get("id") != nq.id
-                for q in session.questionsAsked[:next_idx]
-            ):
-                next_idx += 1
-                continue
-            session.currentQuestionIndex = next_idx
-            await _send_question_message(websocket, session_id, nq)
-            return False
-        return await _finish_current_mock_or_session(
-            websocket, session_id, session, reason="completed",
+        current_answer.transcriptScores = None
+        current_answer.audioScores = audio_scores
+        current_answer.activeDimensions = active_dimensions
+        return await _send_next_question_or_finish(
+            websocket,
+            session_id,
+            session,
+            start_index=answered_idx + 1,
+            reason="completed",
         )
 
     if next_action == "clarify":
@@ -741,18 +849,16 @@ async def _handle_answer(
         question_text=question_text,
     )
 
-    current_answer = next((a for a in session.answers if a.questionId == question_id), None)
-    if current_answer:
-        current_answer.transcriptScores = scores
-        current_answer.audioScores = audio_scores
-        current_answer.activeDimensions = active_dimensions
+    current_answer.transcriptScores = scores
+    current_answer.audioScores = audio_scores
+    current_answer.activeDimensions = active_dimensions
 
     if next_action == "end" or _should_stop_asking(session):
         return await _finish_current_mock_or_session(
             websocket, session_id, session, reason="completed",
         )
 
-    if next_action == "follow_up" and follow_up is not None:
+    if next_action == "follow_up" and follow_up is not None and not _should_skip_followup(session):
         fu_text = follow_up.get("text", "")
         root_id = question_id.split("_f")[0]
         followups_for_q = sum(
@@ -767,7 +873,7 @@ async def _handle_answer(
                 fu_idx = (answered_idx + 1) if answered_idx is not None else (session.currentQuestionIndex + 1)
                 fu_num = followups_for_q + 1
                 follow_up_question = Question(
-                    id=follow_up.get("id", f"{root_id}_f{fu_num}"),
+                    id=f"{root_id}_f{fu_num}",
                     text=fu_text,
                     difficulty=follow_up.get("difficulty", difficulty),
                     order=fu_idx + 1,
@@ -781,32 +887,16 @@ async def _handle_answer(
                 return False
             except Exception as e:
                 logger.warning("Follow-up question handling failed: %s", e)
+    elif next_action == "follow_up" and _should_skip_followup(session):
+        logger.info("Skipping follow-up for session %s because remaining time is low", session_id)
 
-    current_idx = answered_idx if answered_idx is not None else session.currentQuestionIndex
-    next_idx = current_idx + 1
-
-    while next_idx < len(session.questionsAsked):
-        next_q_data = session.questionsAsked[next_idx]
-        nq = Question(**next_q_data) if isinstance(next_q_data, dict) else next_q_data
-        already_sent = any(
-            is_similar_question(_question_dict(q).get("text", ""), nq.text)
-            and _question_dict(q).get("id") != nq.id
-            for q in session.questionsAsked[:next_idx]
-        )
-        if already_sent:
-            next_idx += 1
-            continue
-        session.currentQuestionIndex = next_idx
-        await _send_question_message(websocket, session_id, nq)
-        return False
-
-    session.currentQuestionIndex = next_idx
-    if session.currentMockIndex + 1 < len(session.mocks):
-        return await _handle_mock_transition(
-            websocket, session_id, session, "completed",
-        )
-    await _handle_end_session(websocket, session_id, session)
-    return True
+    return await _send_next_question_or_finish(
+        websocket,
+        session_id,
+        session,
+        start_index=answered_idx + 1,
+        reason="completed",
+    )
 
 
 async def _handle_video_frame(

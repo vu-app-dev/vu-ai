@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from main import app
 from models.interview import Question, StartSessionRequest
 from models.scoring import AudioScores, TranscriptScores
-from routers.interview import start_session
+from routers.interview import _select_next_question, start_session
 from services.interview.session_manager import SessionManager
 
 client = TestClient(app)
@@ -159,3 +159,25 @@ class TestSessionManagerIntegration:
         assert result.cheat.level == "Flagged"
         assert result.cheat.evidence.tabSwitches == 3
         assert result.score > 0
+
+
+class TestQuestionSelection:
+    def test_select_next_question_prefers_unused_topic_then_returns_skipped_topic(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="")
+        session.questionsAsked = [
+            {"id": "q1", "text": "Explain supervised learning.", "difficulty": "MEDIUM", "order": 1, "topicTag": "ml basics"},
+            {"id": "q2", "text": "How do you choose supervised learning metrics?", "difficulty": "MEDIUM", "order": 2, "topicTag": "ml basics"},
+            {"id": "q3", "text": "How do you handle missing data?", "difficulty": "MEDIUM", "order": 3, "topicTag": "data cleaning"},
+        ]
+        mgr.add_answer(session.id, "q1", "answer", 60, "t1", "t2")
+
+        selected = _select_next_question(session, start_index=1)
+        assert selected is not None
+        assert selected[1].id == "q3"
+
+        session.currentQuestionIndex = selected[0]
+        mgr.add_answer(session.id, "q3", "answer", 60, "t3", "t4")
+        selected = _select_next_question(session, start_index=3)
+        assert selected is not None
+        assert selected[1].id == "q2"

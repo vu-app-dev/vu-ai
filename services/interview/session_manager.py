@@ -14,6 +14,14 @@ DEFAULT_SESSION_TIMEOUT_SECONDS = 120
 TIME_LIMIT_BUFFER_SECONDS = 60
 
 
+class DuplicateAnswerError(ValueError):
+    """Raised when the same question receives more than one answer."""
+
+
+class StaleQuestionError(ValueError):
+    """Raised when an answer does not target the active question."""
+
+
 @dataclass
 class Answer:
     questionId: str
@@ -202,22 +210,34 @@ class SessionManager:
         duration_seconds: int,
         started_at: str,
         ended_at: str,
-    ) -> None:
+    ) -> Answer:
         session = self._get_active_session(session_id)
         if session is None:
             raise ValueError(f"Session {session_id} not found or expired")
         mock = session.currentMock
         if mock is None:
             raise ValueError(f"Session {session_id} has no active mock")
-        mock.answers.append(Answer(
+
+        active_question_id = self._current_question_id(mock)
+        if mock.questionsAsked and question_id != active_question_id:
+            raise StaleQuestionError(
+                f"Answer for {question_id!r} rejected; active question is {active_question_id!r}"
+            )
+
+        if any(answer.questionId == question_id for answer in mock.answers):
+            raise DuplicateAnswerError(f"Question {question_id!r} already has an answer")
+
+        answer = Answer(
             questionId=question_id,
             transcript=transcript,
             durationSeconds=duration_seconds,
             startedAt=started_at,
             endedAt=ended_at,
             mockIndex=session.currentMockIndex,
-        ))
+        )
+        mock.answers.append(answer)
         session.touch()
+        return answer
 
     def complete_intro(self, session_id: str, transcript: str) -> None:
         session = self._get_active_session(session_id)
@@ -280,22 +300,28 @@ class SessionManager:
         session = self._get_active_session(session_id)
         if session is None:
             raise ValueError(f"Session {session_id} not found or expired")
-        for answer in session.answers:
-            if answer.questionId == question_id and not answer.aiFeedback:
-                answer.aiFeedback = ai_feedback
-                answer.score = score
-                answer.strengths = strengths or []
-                answer.areasToImprove = areas_to_improve or []
-                break
+        mock = session.currentMock
+        if mock is None:
+            raise ValueError(f"Session {session_id} has no active mock")
+
+        answer = next((a for a in mock.answers if a.questionId == question_id), None)
+        if answer is None:
+            raise ValueError(f"Question {question_id!r} has no recorded answer")
+        if answer.aiFeedback:
+            logger.info(
+                "Ignoring duplicate completion for session %s question %s",
+                session_id,
+                question_id,
+            )
+            return
+
+        answer.aiFeedback = ai_feedback
+        answer.score = score
+        answer.strengths = strengths or []
+        answer.areasToImprove = areas_to_improve or []
         session.touch()
 
         if self._backend_client:
-            answer_transcript = next(
-                (a.transcript for a in session.answers if a.questionId == question_id), ""
-            )
-            answer_duration = next(
-                (a.durationSeconds for a in session.answers if a.questionId == question_id), 0
-            )
             asyncio.create_task(self._persist_question(
                 candidate_id=session.candidateId,
                 question_text=question_text or question_id,
@@ -303,9 +329,9 @@ class SessionManager:
                 score=score,
                 strengths=strengths or [],
                 areas_to_improve=areas_to_improve or [],
-                duration_minutes=round(answer_duration / 60, 2),
-                answer=answer_transcript,
-                idempotency_key=f"{session_id}-{question_id}-1",
+                duration_minutes=round(answer.durationSeconds / 60, 2),
+                answer=answer.transcript,
+                idempotency_key=f"{session_id}-m{answer.mockIndex}-{question_id}",
             ))
 
     async def _persist_question(
@@ -502,6 +528,17 @@ class SessionManager:
             return None
         session.touch()
         return session
+
+    @staticmethod
+    def _current_question_id(mock: MockState) -> str | None:
+        if mock.currentQuestionIndex < 0:
+            return None
+        if mock.currentQuestionIndex >= len(mock.questionsAsked):
+            return None
+        question = mock.questionsAsked[mock.currentQuestionIndex]
+        if isinstance(question, dict):
+            return question.get("id")
+        return getattr(question, "id", None)
 
     def _is_expired(self, session: Session) -> bool:
         return (time.time() - session.lastActivityAt) > self._session_timeout

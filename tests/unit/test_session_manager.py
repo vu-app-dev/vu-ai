@@ -6,7 +6,13 @@ import pytest
 
 from models.interview import CheatEvidence
 from models.scoring import AudioScores, PerformanceResult, TranscriptScores
-from services.interview.session_manager import Session, SessionManager, MockState
+from services.interview.session_manager import (
+    DuplicateAnswerError,
+    MockState,
+    Session,
+    SessionManager,
+    StaleQuestionError,
+)
 
 
 class TestCreateSession:
@@ -101,6 +107,32 @@ class TestAddAnswer:
         with pytest.raises(ValueError):
             mgr.add_answer("unknown", "q1", "text", 60, "t1", "t2")
 
+    def test_add_answer_rejects_duplicate_question_id(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        session.questionsAsked = [{"id": "q1", "text": "Question 1"}]
+        mgr.add_answer(session.id, "q1", "first answer", 60, "t1", "t2")
+
+        with pytest.raises(DuplicateAnswerError):
+            mgr.add_answer(session.id, "q1", "second answer", 60, "t3", "t4")
+
+        assert len(session.answers) == 1
+        assert session.answers[0].transcript == "first answer"
+
+    def test_add_answer_rejects_stale_question_id(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        session.questionsAsked = [
+            {"id": "q1", "text": "Question 1"},
+            {"id": "q2", "text": "Question 2"},
+        ]
+        session.currentQuestionIndex = 1
+
+        with pytest.raises(StaleQuestionError):
+            mgr.add_answer(session.id, "q1", "stale answer", 60, "t1", "t2")
+
+        assert session.answers == []
+
 
 class TestCompleteIntro:
     def test_complete_intro_stores_context_without_answer(self):
@@ -169,6 +201,56 @@ class TestCompleteQuestion:
         )
         await asyncio.sleep(0)
         mock_bc.create_question.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_complete_question_is_idempotent(self):
+        from unittest.mock import AsyncMock
+        mock_bc = AsyncMock()
+        mock_bc.create_question = AsyncMock(return_value=True)
+        mgr = SessionManager(backend_client=mock_bc)
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        mgr.add_answer(session.id, "q1", "transcript", 60, "t1", "t2")
+
+        await mgr.complete_question(session.id, "q1", ai_feedback="Good", score=80.0)
+        await mgr.complete_question(session.id, "q1", ai_feedback="Duplicate", score=10.0)
+        await asyncio.sleep(0)
+
+        assert session.answers[0].aiFeedback == "Good"
+        assert session.answers[0].score == 80.0
+        mock_bc.create_question.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_complete_question_uses_current_mock_when_question_ids_repeat(self):
+        from unittest.mock import AsyncMock
+        mock_bc = AsyncMock()
+        mock_bc.create_question = AsyncMock(return_value=True)
+        mgr = SessionManager(backend_client=mock_bc)
+        session = mgr.create_session(
+            candidate_id="c1",
+            cv_url="https://cv.example.com",
+            mocks=[
+                {"mockId": "m1", "mockData": {"type": "TECHNICAL"}},
+                {"mockId": "m2", "mockData": {"type": "BEHAVIORAL"}},
+            ],
+        )
+
+        mgr.add_answer(session.id, "q1", "technical answer", 60, "t1", "t2")
+        await mgr.complete_question(session.id, "q1", ai_feedback="Technical", score=70.0)
+        mgr.transition_to_next_mock(session.id)
+        mgr.add_answer(session.id, "q1", "behavioral answer", 60, "t3", "t4")
+        await mgr.complete_question(session.id, "q1", ai_feedback="Behavioral", score=90.0)
+        await asyncio.sleep(0)
+
+        assert session.mocks[0].answers[0].aiFeedback == "Technical"
+        assert session.mocks[1].answers[0].aiFeedback == "Behavioral"
+        idempotency_keys = [
+            call.kwargs["idempotency_key"]
+            for call in mock_bc.create_question.call_args_list
+        ]
+        assert idempotency_keys == [
+            f"{session.id}-m0-q1",
+            f"{session.id}-m1-q1",
+        ]
 
 
 class TestEndSession:
