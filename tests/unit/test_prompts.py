@@ -214,7 +214,7 @@ class TestActiveDimensions:
         prompt = format_prompt("evaluate_answer", question="Explain React",
                                transcript="React is a library", duration_seconds=60,
                                mock_type="TECHNICAL", difficulty="MEDIUM", order=1)
-        assert "Score ALL six dimensions" in prompt
+        assert "Score ALL five dimensions" in prompt
 
     def test_evaluate_prompt_with_active_dimensions(self):
         dims = ["technical", "communication", "clarityOfExplanation"]

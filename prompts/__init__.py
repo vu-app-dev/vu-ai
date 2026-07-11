@@ -36,7 +36,7 @@ def format_prompt(template_name: str, **kwargs) -> str:
                 f"Only score these dimensions. For any dimension NOT listed above, return score 0."
             )
         else:
-            kwargs["active_dimensions"] = "Score ALL six dimensions for this question."
+            kwargs["active_dimensions"] = "Score ALL five dimensions for this question."
         kwargs["mock_type"] = mock_type
 
     if "cv_skills" in kwargs and isinstance(kwargs["cv_skills"], list):

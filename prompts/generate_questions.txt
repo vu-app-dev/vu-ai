@@ -59,7 +59,8 @@ Rules for assigning dimensions:
 - Applied/scenario questions ("How would you handle X?", "Design a system for Y"): all 5 dimensions
 - Debugging/troubleshooting ("Your system has X problem, what do you do?"): ["technical", "problemSolving", "structuredThinking", "communication"]
 - Behavioral/experience ("Tell me about a time when..."): ["communication", "clarityOfExplanation", "structuredThinking"]
-- Every question MUST include at least "technical" and "communication"
+- Every question MUST include at least "communication"
+- TECHNICAL and CODING questions must also include "technical"
 </active_dimensions_guide>
 
 <existing_questions>

@@ -29,6 +29,13 @@ class ScoreAggregator:
         video: VideoScores | None = None,
     ) -> float:
         exclude_fields = []
+        transcript_fields = (
+            "communication", "problemSolving", "technical",
+            "clarityOfExplanation", "structuredThinking",
+        )
+        for field_name in transcript_fields:
+            if getattr(transcript, field_name) is None:
+                exclude_fields.append(field_name)
         if audio is None or audio.confidence is None:
             exclude_fields.append("confidence")
         if audio is None or audio.speaking is None:
@@ -45,8 +52,7 @@ class ScoreAggregator:
             weight = getattr(weights, field_name)
             if weight == 0:
                 continue
-            if field_name in ("communication", "problemSolving", "technical",
-                            "clarityOfExplanation", "structuredThinking"):
+            if field_name in transcript_fields:
                 values[field_name] = getattr(transcript, field_name)
             elif field_name == "confidence":
                 values[field_name] = audio.confidence if audio and audio.confidence is not None else 0
@@ -65,7 +71,7 @@ class ScoreAggregator:
         if total_weight == 0:
             return 0.0
 
-        weighted_sum = sum(values.get(f, 0) * getattr(weights, f) for f in values)
+        weighted_sum = sum((values.get(f) or 0) * getattr(weights, f) for f in values)
         return round(weighted_sum / total_weight, 2)
 
     async def adjust_with_llm(

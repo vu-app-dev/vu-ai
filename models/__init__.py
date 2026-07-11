@@ -15,7 +15,6 @@ from .interview import (
     WSAnalysisUpdateMessage,
     WSSessionEndMessage,
     WSErrorMessage,
-    EvaluateAnswerResponse,
 )
 from .cv import CvAnalyzeRequest, CvAnalyzeResponse
 from .scoring import (
@@ -46,7 +45,6 @@ __all__ = [
     "WSAnalysisUpdateMessage",
     "WSSessionEndMessage",
     "WSErrorMessage",
-    "EvaluateAnswerResponse",
     "CvAnalyzeRequest",
     "CvAnalyzeResponse",
     "TranscriptScores",

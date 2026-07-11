@@ -77,7 +77,7 @@ class TestTranscriptScorer:
             mock_type="TECHNICAL",
         )
         assert result is not None
-        assert result.technical == 0.0
+        assert result.technical is None
 
     @pytest.mark.asyncio
     async def test_score_handles_partial_llm_response(self):
@@ -118,8 +118,8 @@ class TestTranscriptScorer:
         assert result.technical == 100.0
         assert result.communication == 80.0
         assert result.clarityOfExplanation == 60.0
-        assert result.problemSolving == 0.0
-        assert result.structuredThinking == 0.0
+        assert result.problemSolving is None
+        assert result.structuredThinking is None
 
     @pytest.mark.asyncio
     async def test_score_with_none_active_dimensions_scores_all(self):
@@ -202,6 +202,20 @@ class TestScoreAggregatorWeightedAverage:
         )
         avg = agg.compute_weighted_average(transcript, audio=None, video=None)
         assert avg == 85.0
+
+    def test_missing_transcript_dimensions_are_redistributed(self):
+        weights = ScoreWeights(
+            technical=50.0, communication=50.0, problemSolving=50.0,
+            clarityOfExplanation=0.0, structuredThinking=0.0,
+            confidence=0.0, speaking=0.0, eyeContact=0.0,
+        )
+        agg = ScoreAggregator(weights=weights)
+        transcript = TranscriptScores(
+            technical=100.0,
+            communication=50.0,
+            problemSolving=None,
+        )
+        assert agg.compute_weighted_average(transcript) == 75.0
 
 
 class TestScoreAggregatorLLMAdjustment:

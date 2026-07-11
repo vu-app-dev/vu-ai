@@ -168,13 +168,3 @@ class WSErrorMessage(WSMessage):
     ]
     message: str
     retryable: bool = False
-
-
-class EvaluateAnswerResponse(BaseModel):
-    scores: dict[str, float]
-    overallComment: str
-    feedback: str
-    strengths: list[str] = Field(default_factory=list)
-    areasToImprove: list[str] = Field(default_factory=list)
-    nextAction: Literal["follow_up", "next_question", "end"] = "next_question"
-    followUpQuestion: Optional[Question] = None

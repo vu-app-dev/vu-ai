@@ -361,10 +361,11 @@ class SessionManager:
                 if a.transcriptScores is None:
                     continue
                 for dim in ALL_TRANSCRIPT_DIMENSIONS:
-                    if a.activeDimensions is None or dim in a.activeDimensions:
-                        dim_values[dim].append(getattr(a.transcriptScores, dim))
+                    value = getattr(a.transcriptScores, dim)
+                    if value is not None:
+                        dim_values[dim].append(value)
             avg_transcript = TranscriptScores(**{
-                dim: (sum(vals) / len(vals) if vals else 0.0)
+                dim: (sum(vals) / len(vals) if vals else None)
                 for dim, vals in dim_values.items()
             })
         else:

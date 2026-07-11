@@ -18,7 +18,6 @@ from models.interview import (
     WSAnalysisUpdateMessage,
     WSSessionEndMessage,
     WSErrorMessage,
-    EvaluateAnswerResponse,
 )
 from models.cv import CvAnalyzeRequest, CvAnalyzeResponse
 from models.scoring import (
@@ -194,6 +193,7 @@ class TestWSMessages:
 
 class TestEvaluateAnswerResponse:
     def test_valid_response(self):
+        from services.scoring.transcript_scorer import EvaluateAnswerResponse
         resp = EvaluateAnswerResponse(
             scores={"communication": 80, "technical": 75},
             overallComment="Solid answer",
@@ -205,23 +205,25 @@ class TestEvaluateAnswerResponse:
         assert resp.nextAction == "next_question"
 
     def test_follow_up_with_question(self):
+        from services.scoring.transcript_scorer import EvaluateAnswerResponse
         resp = EvaluateAnswerResponse(
             scores={"communication": 70},
             overallComment="Decent",
             feedback="Consider elaborating",
             nextAction="follow_up",
-            followUpQuestion=Question(id="f1", text="Can you elaborate?", difficulty="MEDIUM", order=2),
+            followUpQuestion={"id": "f1", "text": "Can you elaborate?", "difficulty": "MEDIUM", "order": 2},
         )
         assert resp.followUpQuestion is not None
 
-    def test_invalid_next_action(self):
-        with pytest.raises(ValidationError):
-            EvaluateAnswerResponse(
-                scores={"communication": 70},
-                overallComment="",
-                feedback="",
-                nextAction="invalid_action",
-            )
+    def test_clarify_action(self):
+        from services.scoring.transcript_scorer import EvaluateAnswerResponse
+        resp = EvaluateAnswerResponse(
+            scores={"communication": 0},
+            overallComment="",
+            feedback="What do you mean by hooks?",
+            nextAction="clarify",
+        )
+        assert resp.nextAction == "clarify"
 
 
 class TestCvModels:

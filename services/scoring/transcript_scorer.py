@@ -51,7 +51,13 @@ class TranscriptScorer:
     ) -> tuple[TranscriptScores, EvaluateAnswerResponse | None]:
         if not transcript or not transcript.strip():
             logger.warning("Empty transcript received, returning zero scores")
-            return TranscriptScores(), None
+            return TranscriptScores(
+                communication=0.0,
+                problemSolving=0.0,
+                technical=0.0,
+                clarityOfExplanation=0.0,
+                structuredThinking=0.0,
+            ), None
 
         asked_list = "None yet — this is the first question."
         if asked_questions:
@@ -89,13 +95,13 @@ class TranscriptScorer:
                 score_vals = {}
                 for dim in all_dims:
                     if active_dimensions is not None and dim not in active_dimensions:
+                        score_vals[dim] = None
+                    elif response.nextAction == "clarify":
                         score_vals[dim] = 0.0
                     else:
                         score_vals[dim] = _bars_to_100(response.scores.get(dim, 0.0))
 
                 scores = TranscriptScores(**score_vals)
-                if response.nextAction == "clarify":
-                    scores = TranscriptScores()
                 return scores, response
 
         except Exception as e:

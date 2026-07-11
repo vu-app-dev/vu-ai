@@ -15,7 +15,7 @@ You must respond with valid JSON matching this exact schema:
     "structuredThinking": <1-5>
   }},
   "overallComment": "Brief overall assessment",
-  "feedback": "3-5 word specific spoken feedback",
+  "feedback": "3-10 word specific assessment note",
   "strengths": ["strength1", "strength2"],
   "areasToImprove": ["area1", "area2"],
   "nextAction": "follow_up" | "next_question" | "clarify" | "end",

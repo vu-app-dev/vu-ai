@@ -6,15 +6,17 @@ from models.interview import CheatClassification, CheatEvidence
 
 
 class TranscriptScores(BaseModel):
-    communication: float = 0.0
-    problemSolving: float = 0.0
-    technical: float = 0.0
-    clarityOfExplanation: float = 0.0
-    structuredThinking: float = 0.0
+    communication: Optional[float] = None
+    problemSolving: Optional[float] = None
+    technical: Optional[float] = None
+    clarityOfExplanation: Optional[float] = None
+    structuredThinking: Optional[float] = None
 
     @field_validator("*", mode="after")
     @classmethod
-    def clamp_0_100(cls, v: float) -> float:
+    def clamp_optional_0_100(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
         return max(0.0, min(100.0, v))
 
 

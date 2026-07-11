@@ -1,5 +1,6 @@
 import asyncio
 import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -247,8 +248,26 @@ class TestEndSession:
         mock_bc.create_performance = AsyncMock(return_value=True)
         mgr = SessionManager(backend_client=mock_bc)
         session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
-        await mgr.end_session(session.id)
+        with patch("services.scoring.score_aggregator.ScoreAggregator.adjust_with_llm", new=AsyncMock(return_value=None)), \
+             patch("services.scoring.score_aggregator.ScoreAggregator.generate_summary", new=AsyncMock(return_value=None)):
+            await mgr.end_session(session.id)
         mock_bc.create_performance.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_end_session_persistence_preserves_null_scores(self):
+        from unittest.mock import AsyncMock
+        mock_bc = AsyncMock()
+        mock_bc.create_performance = AsyncMock(return_value=True)
+        mgr = SessionManager(backend_client=mock_bc)
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+
+        with patch("services.scoring.score_aggregator.ScoreAggregator.adjust_with_llm", new=AsyncMock(return_value=None)), \
+             patch("services.scoring.score_aggregator.ScoreAggregator.generate_summary", new=AsyncMock(return_value=None)):
+            await mgr.end_session(session.id)
+
+        payload = mock_bc.create_performance.call_args.kwargs["data"]
+        assert payload["eyeContact"] is None
+        assert payload["communication"] is None
 
 
 class TestCleanupExpired:
@@ -452,8 +471,8 @@ class TestMultiMockSession:
         answer1.aiFeedback = "Good"
         answer1.score = 80.0
         answer1.transcriptScores = TranscriptScores(
-            communication=80.0, problemSolving=0.0, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=0.0,
+            communication=80.0, problemSolving=None, technical=80.0,
+            clarityOfExplanation=60.0, structuredThinking=None,
         )
         answer1.activeDimensions = ["technical", "communication", "clarityOfExplanation"]
 
@@ -467,7 +486,9 @@ class TestMultiMockSession:
         )
         answer2.activeDimensions = None  # all dimensions active
 
-        result = await mgr.end_session(session.id)
+        with patch("services.scoring.score_aggregator.ScoreAggregator.adjust_with_llm", new=AsyncMock(return_value=None)), \
+             patch("services.scoring.score_aggregator.ScoreAggregator.generate_summary", new=AsyncMock(return_value=None)):
+            result = await mgr.end_session(session.id)
         assert result.communication == 70.0  # (80+60)/2
         assert result.technical == 90.0  # (80+100)/2
         assert result.clarityOfExplanation == 70.0  # (60+80)/2

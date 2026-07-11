@@ -192,6 +192,7 @@ class BackendClient:
                         "Retry exhausted for %s key=%s after %d attempts",
                         entry.endpoint_label, key, self._max_attempts,
                     )
+                    self._queue.pop(key, None)
                     continue
                 try:
                     client = await self._get_client()
@@ -205,18 +206,19 @@ class BackendClient:
                         "Retry succeeded for %s key=%s (attempt %d)",
                         entry.endpoint_label, key, entry.attempts,
                     )
+                    self._queue.pop(key, None)
                 except (httpx.RequestError, httpx.HTTPStatusError) as e:
                     if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
                         logger.error(
                             "Retry failed with client error for %s key=%s: %s",
                             entry.endpoint_label, key, e,
                         )
+                        self._queue.pop(key, None)
                         continue
                     logger.warning(
                         "Retry failed for %s key=%s (attempt %d): %s",
                         entry.endpoint_label, key, entry.attempts, e,
                     )
-                    self._queue[key] = entry
 
     async def close(self):
         await self.stop_retry_worker()

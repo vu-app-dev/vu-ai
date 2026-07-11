@@ -686,27 +686,50 @@ async def _handle_answer(
         areas_to_improve = []
         next_action = "next_question"
         follow_up = None
+        current_answer = next((a for a in session.answers if a.questionId == question_id), None)
+        if current_answer:
+            current_answer.transcriptScores = None
+            current_answer.audioScores = audio_scores
+            current_answer.activeDimensions = active_dimensions
+        if _should_stop_asking(session):
+            return await _finish_current_mock_or_session(
+                websocket, session_id, session, reason="completed",
+            )
+        current_idx = answered_idx if answered_idx is not None else session.currentQuestionIndex
+        next_idx = current_idx + 1
+        while next_idx < len(session.questionsAsked):
+            next_q_data = session.questionsAsked[next_idx]
+            nq = Question(**next_q_data) if isinstance(next_q_data, dict) else next_q_data
+            if any(
+                is_similar_question(_question_dict(q).get("text", ""), nq.text)
+                and _question_dict(q).get("id") != nq.id
+                for q in session.questionsAsked[:next_idx]
+            ):
+                next_idx += 1
+                continue
+            session.currentQuestionIndex = next_idx
+            await _send_question_message(websocket, session_id, nq)
+            return False
+        return await _finish_current_mock_or_session(
+            websocket, session_id, session, reason="completed",
+        )
 
     if next_action == "clarify":
         clarify_q_audio = await _tts(feedback_text)
 
+        clarify_idx = (answered_idx + 1) if answered_idx is not None else (session.currentQuestionIndex + 1)
         clarified_q = Question(
             id=f"{question_id}_c1",
             text=feedback_text,
             difficulty=difficulty,
-            order=(answered_idx + 1) if answered_idx is not None else (session.currentQuestionIndex + 1),
+            order=clarify_idx + 1,
             speechType="question",
+            activeDimensions=active_dimensions,
+            topicTag="clarification",
         )
-        clarify_msg = WSQuestionMessage(
-            sessionId=session_id,
-            id=clarified_q.id,
-            text=clarified_q.text,
-            difficulty=clarified_q.difficulty,
-            order=clarified_q.order,
-            speechType="question",
-            audioBase64=clarify_q_audio,
-        )
-        await websocket.send_json(clarify_msg.model_dump())
+        session.questionsAsked.insert(clarify_idx, clarified_q.model_dump())
+        session.currentQuestionIndex = clarify_idx
+        await _send_question_message(websocket, session_id, clarified_q)
         return False
 
     await session_manager.complete_question(
@@ -779,15 +802,11 @@ async def _handle_answer(
 
     session.currentQuestionIndex = next_idx
     if session.currentMockIndex + 1 < len(session.mocks):
-        ended = await _handle_mock_transition(
+        return await _handle_mock_transition(
             websocket, session_id, session, "completed",
         )
-        return ended
-    else:
-        await _handle_end_session(websocket, session_id, session)
-        return True
-
-    return False
+    await _handle_end_session(websocket, session_id, session)
+    return True
 
 
 async def _handle_video_frame(
