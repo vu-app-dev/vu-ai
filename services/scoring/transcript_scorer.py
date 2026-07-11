@@ -45,6 +45,9 @@ class TranscriptScorer:
         asked_questions: list[str] | None = None,
         conversation_history: str = "",
         active_dimensions: list[str] | None = None,
+        candidate_intro: str = "",
+        remaining_seconds: int | None = None,
+        total_questions: int | str = "5-8",
     ) -> tuple[TranscriptScores, EvaluateAnswerResponse | None]:
         if not transcript or not transcript.strip():
             logger.warning("Empty transcript received, returning zero scores")
@@ -64,12 +67,16 @@ class TranscriptScorer:
                 difficulty=difficulty,
                 order=order,
                 question_number=order,
-                total_questions="5-8",
+                total_questions=total_questions,
                 mock_number=mock_number,
                 total_mocks=total_mocks,
                 asked_questions=asked_list,
                 conversation_history=conversation_history,
                 active_dimensions=active_dimensions,
+                candidate_intro=candidate_intro or "No self-introduction provided.",
+                remaining_time_seconds=(
+                    str(int(remaining_seconds)) if remaining_seconds is not None else "unknown"
+                ),
             )
 
             response = await self._llm.generate_json(prompt, EvaluateAnswerResponse)
@@ -77,7 +84,7 @@ class TranscriptScorer:
             if response and response.scores:
                 all_dims = [
                     "communication", "problemSolving", "technical",
-                    "clarityOfExplanation", "structuredThinking", "askingClarifications",
+                    "clarityOfExplanation", "structuredThinking",
                 ]
                 score_vals = {}
                 for dim in all_dims:
@@ -110,6 +117,9 @@ class TranscriptScorer:
         asked_questions: list[str] | None = None,
         conversation_history: str = "",
         active_dimensions: list[str] | None = None,
+        candidate_intro: str = "",
+        remaining_seconds: int | None = None,
+        total_questions: int | str = "5-8",
     ) -> TranscriptScores:
         scores, _ = await self.evaluate(
             question=question,
@@ -124,5 +134,8 @@ class TranscriptScorer:
             asked_questions=asked_questions,
             conversation_history=conversation_history,
             active_dimensions=active_dimensions,
+            candidate_intro=candidate_intro,
+            remaining_seconds=remaining_seconds,
+            total_questions=total_questions,
         )
         return scores

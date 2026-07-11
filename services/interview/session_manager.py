@@ -61,6 +61,11 @@ class Session:
     status: str = "active"
     timeLimitSeconds: float | None = None
     audioBuffer: bytearray = field(default_factory=bytearray)
+    introCompleted: bool = False
+    candidateIntroTranscript: str = ""
+    cvSkills: list[str] = field(default_factory=list)
+    cvSummary: str = ""
+    previousQuestionTexts: list[str] = field(default_factory=list)
 
     @property
     def mockId(self) -> str:
@@ -212,6 +217,14 @@ class SessionManager:
             endedAt=ended_at,
             mockIndex=session.currentMockIndex,
         ))
+        session.touch()
+
+    def complete_intro(self, session_id: str, transcript: str) -> None:
+        session = self._get_active_session(session_id)
+        if session is None:
+            raise ValueError(f"Session {session_id} not found or expired")
+        session.candidateIntroTranscript = transcript.strip()
+        session.introCompleted = True
         session.touch()
 
     def add_video_frame(self, session_id: str, frame_result: dict) -> None:
@@ -453,7 +466,6 @@ class SessionManager:
             technical=avg_transcript.technical,
             clarityOfExplanation=avg_transcript.clarityOfExplanation,
             structuredThinking=avg_transcript.structuredThinking,
-            askingClarifications=avg_transcript.askingClarifications,
             confidence=audio_scores.confidence,
             speaking=audio_scores.speaking,
             eyeContact=video_scores.eyeContact,
@@ -468,9 +480,6 @@ class SessionManager:
             try:
                 perf_data = result.model_dump(exclude={"llmAdjustment"})
                 perf_data["cheat"] = cheat.level
-                for k in ("confidence", "speaking", "eyeContact"):
-                    if perf_data.get(k) is None:
-                        perf_data[k] = 0
                 await self._backend_client.create_performance(
                     session.candidateId,
                     data=perf_data,

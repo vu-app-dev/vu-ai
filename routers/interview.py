@@ -23,6 +23,7 @@ from models.interview import (
 )
 from models.scoring import TranscriptScores
 from services.interview.cheat_detector import CheatDetector
+from services.interview.question_similarity import is_similar_question, question_similarity
 from services.interview.question_generator import QuestionGenerator
 from services.interview.session_manager import SessionManager
 from services.scoring.audio_scorer import AudioScorer
@@ -39,6 +40,12 @@ router = APIRouter(prefix="/api/interview", tags=["interview"])
 MAX_FOLLOWUPS_PER_MOCK = 6
 MAX_FOLLOWUPS_PER_QUESTION = 2
 MOCK_GRACE_SECONDS = 30
+FINAL_QUESTION_RESERVE_SECONDS = 60
+INTRO_QUESTION_ID = "intro"
+INTRO_QUESTION_TEXT = (
+    "To begin, please introduce yourself and briefly share your background, "
+    "recent experience, and what makes you interested in this opportunity."
+)
 
 session_manager = SessionManager(backend_client=backend_client)
 cheat_detector = CheatDetector()
@@ -99,10 +106,13 @@ def _get_timer_timeout(session) -> float:
     return max(0.1, remaining) if remaining > 0 else 0.0
 
 
-def _build_asked_questions_list(session) -> list[str]:
+def _build_asked_questions_list(session, through_index: int | None = None) -> list[str]:
+    questions = session.questionsAsked
+    if through_index is not None:
+        questions = questions[: through_index + 1]
     return [
         _question_dict(q).get("text", "")
-        for q in session.questionsAsked
+        for q in questions
         if _question_dict(q).get("text", "")
     ]
 
@@ -127,15 +137,139 @@ def _build_conversation_history(session, current_question_id: str) -> str:
     return "\n\n".join(pairs)
 
 
+def _question_similarity(a: str, b: str) -> float:
+    return question_similarity(a, b).combined
+
+
 def _is_duplicate_question(text: str, session) -> bool:
     if not text:
         return False
-    normalized = text.strip().lower()
-    for q_data in session.questionsAsked:
-        existing = _question_dict(q_data).get("text", "").strip().lower()
-        if existing and existing == normalized:
+    for existing in _all_question_texts(session):
+        if not existing:
+            continue
+        if is_similar_question(text, existing):
             return True
     return False
+
+
+def _all_question_texts(session) -> list[str]:
+    texts = list(getattr(session, "previousQuestionTexts", []) or [])
+    for mock in getattr(session, "mocks", []) or []:
+        for q_data in mock.questionsAsked:
+            text = _question_dict(q_data).get("text", "")
+            if text:
+                texts.append(text)
+    return texts
+
+
+def _build_intro_question() -> Question:
+    return Question(
+        id=INTRO_QUESTION_ID,
+        text=INTRO_QUESTION_TEXT,
+        difficulty="EASY",
+        order=0,
+        speechType="question",
+        activeDimensions=["communication", "clarityOfExplanation", "structuredThinking"],
+        topicTag="self-introduction",
+    )
+
+
+def _mock_remaining_seconds(session) -> int | None:
+    mock = session.currentMock
+    if mock is None or mock.timeLimitSeconds is None:
+        return None
+    remaining = mock.timeLimitSeconds - (time.time() - mock.startedAt)
+    return max(0, int(remaining))
+
+
+def _should_stop_asking(session) -> bool:
+    remaining = _mock_remaining_seconds(session)
+    return remaining is not None and remaining <= FINAL_QUESTION_RESERVE_SECONDS
+
+
+def _dedupe_questions(
+    questions: list[Question],
+    existing_texts: list[str] | None = None,
+) -> list[Question]:
+    deduped: list[Question] = []
+    existing_texts = existing_texts or []
+    for question in questions:
+        if any(is_similar_question(question.text, existing) for existing in existing_texts):
+            logger.info("Skipping question similar to previous interview question: %s", question.text)
+            continue
+        if any(is_similar_question(question.text, existing.text) for existing in deduped):
+            logger.info("Skipping duplicate generated question: %s", question.text)
+            continue
+        question.order = len(deduped) + 1
+        question.id = f"q{question.order}"
+        deduped.append(question)
+    return deduped
+
+
+async def _prepare_questions_for_current_mock(session) -> list[Question]:
+    if session.questionsAsked:
+        return [
+            Question(**q_data) if isinstance(q_data, dict) else q_data
+            for q_data in session.questionsAsked
+        ]
+
+    mock_data = session.mockData
+    mock_type = mock_data.get("type", "TECHNICAL")
+    difficulty = mock_data.get("difficulty", "MEDIUM")
+    question_gen = _get_question_generator()
+
+    try:
+        questions = await question_gen.generate_questions(
+            mock_data=mock_data,
+            cv_skills=session.cvSkills,
+            candidate_intro=session.candidateIntroTranscript,
+        )
+    except Exception as e:
+        logger.warning("Question generation failed for session %s, using fallback: %s", session.id, e)
+        questions = QuestionGenerator._fallback_questions(
+            mock_data.get("questions", []),
+            mock_type,
+            difficulty,
+        )
+
+    if not questions:
+        questions = QuestionGenerator._fallback_questions([], mock_type, difficulty)
+
+    max_questions = QuestionGenerator.question_count_for_time(
+        mock_data.get("estimatedTimeInMinutes", 30)
+    )
+    questions = _dedupe_questions(questions, existing_texts=_all_question_texts(session))
+    questions = questions[:max_questions]
+    session.questionsAsked = [q.model_dump() for q in questions]
+    session.currentQuestionIndex = 0
+    return questions
+
+
+async def _send_question_message(websocket: WebSocket, session_id: str, question: Question) -> None:
+    question_msg = WSQuestionMessage(
+        sessionId=session_id,
+        id=question.id,
+        text=question.text,
+        difficulty=question.difficulty,
+        order=question.order,
+        speechType=question.speechType,
+        topicTag=question.topicTag,
+        audioBase64=await _tts(question.text),
+    )
+    await websocket.send_json(question_msg.model_dump())
+
+
+async def _finish_current_mock_or_session(
+    websocket: WebSocket,
+    session_id: str,
+    session,
+    reason: str = "completed",
+) -> bool:
+    session.currentQuestionIndex = len(session.questionsAsked)
+    if session.currentMockIndex + 1 < len(session.mocks):
+        return await _handle_mock_transition(websocket, session_id, session, reason)
+    await _handle_end_session(websocket, session_id, session, reason=reason)
+    return True
 
 
 FALLBACK_MOCK_DATA = {
@@ -191,6 +325,7 @@ async def start_session(request: StartSessionRequest):
     question_gen = _get_question_generator()
 
     cv_skills: list[str] = []
+    cv_summary = ""
     cv_analysis_result = None
     if request.cvUrl:
         try:
@@ -206,8 +341,20 @@ async def start_session(request: StartSessionRequest):
             if cv_analysis_result and cv_analysis_result.skills:
                 cv_skills = cv_analysis_result.skills
                 logger.info("CV analysis completed, %d skills extracted: %s", len(cv_skills), cv_skills[:5])
+            if cv_analysis_result and cv_analysis_result.summary:
+                cv_summary = cv_analysis_result.summary
         except Exception as e:
             logger.warning("CV analysis failed during interview start: %s", e)
+
+    session.cvSkills = cv_skills
+    session.cvSummary = cv_summary
+    session.previousQuestionTexts = [
+        q for q in request.previousQuestions
+        if isinstance(q, str) and q.strip()
+    ]
+    if request.skipIntro:
+        session.introCompleted = True
+        session.candidateIntroTranscript = request.candidateIntro.strip()
 
     try:
         intro_text = await question_gen.generate_intro(
@@ -217,6 +364,7 @@ async def start_session(request: StartSessionRequest):
             estimated_time=first_mock_data.get("estimatedTimeInMinutes", 30),
             difficulty=difficulty,
             cv_skills=cv_skills,
+            cv_summary=cv_summary,
         )
     except Exception:
         intro_text = QuestionGenerator._fallback_intro(
@@ -224,31 +372,17 @@ async def start_session(request: StartSessionRequest):
             first_mock_data.get("technologies", []),
         )
 
-    try:
-        questions = await question_gen.generate_questions(
-            mock_data=first_mock_data,
-            cv_skills=cv_skills,
+    if request.skipIntro:
+        questions = await _prepare_questions_for_current_mock(session)
+        first_question = questions[0] if questions else Question(
+            id="q1",
+            text="Tell me about your experience.",
+            difficulty="MEDIUM",
+            order=1,
+            speechType="question",
         )
-    except Exception:
-        questions = QuestionGenerator._fallback_questions(
-            first_mock_data.get("questions", []),
-            mock_type,
-            difficulty,
-        )
-
-    if not questions:
-        questions = QuestionGenerator._fallback_questions(
-            [], mock_type, difficulty,
-        )
-
-    first_question = questions[0] if questions else Question(
-        id="q1",
-        text="Tell me about your experience.",
-        difficulty="MEDIUM",
-        order=1,
-        speechType="question",
-    )
-    session.questionsAsked = [q.model_dump() for q in questions]
+    else:
+        first_question = _build_intro_question()
 
     intro_audio, first_q_audio = await tts_service.synthesize_many(
         [intro_text, first_question.text]
@@ -413,6 +547,40 @@ async def interview_websocket(
             pass
 
 
+async def _handle_intro_answer(
+    websocket: WebSocket,
+    session_id: str,
+    transcript: str,
+    session,
+):
+    try:
+        session_manager.complete_intro(session_id, transcript)
+    except ValueError:
+        await websocket.send_json(WSErrorMessage(
+            sessionId=session_id,
+            code="SESSION_EXPIRED",
+            message="Session has expired",
+            retryable=False,
+        ).model_dump())
+        return False
+
+    if _should_stop_asking(session):
+        return await _finish_current_mock_or_session(
+            websocket, session_id, session, reason="completed",
+        )
+
+    questions = await _prepare_questions_for_current_mock(session)
+    if not questions:
+        return await _finish_current_mock_or_session(
+            websocket, session_id, session, reason="completed",
+        )
+
+    first_question = questions[0]
+    session.currentQuestionIndex = 0
+    await _send_question_message(websocket, session_id, first_question)
+    return False
+
+
 async def _handle_answer(
     websocket: WebSocket,
     session_id: str,
@@ -426,6 +594,14 @@ async def _handle_answer(
     duration_seconds = data.get("durationSeconds", 0)
     started_at = data.get("startedAt", "")
     ended_at = data.get("endedAt", "")
+
+    if question_id == INTRO_QUESTION_ID and not session.introCompleted:
+        return await _handle_intro_answer(
+            websocket=websocket,
+            session_id=session_id,
+            transcript=transcript,
+            session=session,
+        )
 
     # Find the actual question text + its index from the session
     question_text = transcript[:200] if transcript else "No question context"
@@ -458,8 +634,9 @@ async def _handle_answer(
     mock_number = session.currentMockIndex + 1
     total_mocks = len(session.mocks)
 
-    asked_questions = _build_asked_questions_list(session)
+    asked_questions = _build_asked_questions_list(session, answered_idx)
     conversation_history = _build_conversation_history(session, question_id)
+    remaining_seconds = _mock_remaining_seconds(session)
 
     try:
         scores, eval_response = await transcript_scorer.evaluate(
@@ -474,6 +651,9 @@ async def _handle_answer(
             asked_questions=asked_questions,
             conversation_history=conversation_history,
             active_dimensions=active_dimensions,
+            candidate_intro=session.candidateIntroTranscript,
+            remaining_seconds=remaining_seconds,
+            total_questions=len(session.questionsAsked) or "unknown",
         )
     except Exception:
         scores = TranscriptScores()
@@ -544,11 +724,17 @@ async def _handle_answer(
         current_answer.audioScores = audio_scores
         current_answer.activeDimensions = active_dimensions
 
+    if next_action == "end" or _should_stop_asking(session):
+        return await _finish_current_mock_or_session(
+            websocket, session_id, session, reason="completed",
+        )
+
     if next_action == "follow_up" and follow_up is not None:
         fu_text = follow_up.get("text", "")
+        root_id = question_id.split("_f")[0]
         followups_for_q = sum(
             1 for q in session.questionsAsked
-            if _question_dict(q).get("id", "").startswith(f"{question_id}_f")
+            if _question_dict(q).get("id", "").startswith(f"{root_id}_f")
         )
         too_many_per_q = followups_for_q >= MAX_FOLLOWUPS_PER_QUESTION
         too_many = _count_followups(session.questionsAsked) >= MAX_FOLLOWUPS_PER_MOCK
@@ -556,26 +742,19 @@ async def _handle_answer(
         if fu_text and not too_many_per_q and not too_many and not is_dup:
             try:
                 fu_idx = (answered_idx + 1) if answered_idx is not None else (session.currentQuestionIndex + 1)
+                fu_num = followups_for_q + 1
                 follow_up_question = Question(
-                    id=follow_up.get("id", f"{question_id}_f1"),
+                    id=follow_up.get("id", f"{root_id}_f{fu_num}"),
                     text=fu_text,
                     difficulty=follow_up.get("difficulty", difficulty),
                     order=fu_idx + 1,
                     speechType="follow_up",
                     activeDimensions=active_dimensions,
+                    topicTag=follow_up.get("topicTag") or "follow-up",
                 )
                 session.questionsAsked.insert(fu_idx, follow_up_question.model_dump())
                 session.currentQuestionIndex = fu_idx
-                question_msg = WSQuestionMessage(
-                    sessionId=session_id,
-                    id=follow_up_question.id,
-                    text=follow_up_question.text,
-                    difficulty=follow_up_question.difficulty,
-                    order=follow_up_question.order,
-                    speechType="follow_up",
-                    audioBase64=await _tts(follow_up_question.text),
-                )
-                await websocket.send_json(question_msg.model_dump())
+                await _send_question_message(websocket, session_id, follow_up_question)
                 return False
             except Exception as e:
                 logger.warning("Follow-up question handling failed: %s", e)
@@ -587,7 +766,7 @@ async def _handle_answer(
         next_q_data = session.questionsAsked[next_idx]
         nq = Question(**next_q_data) if isinstance(next_q_data, dict) else next_q_data
         already_sent = any(
-            _question_dict(q).get("text", "").strip().lower() == nq.text.strip().lower()
+            is_similar_question(_question_dict(q).get("text", ""), nq.text)
             and _question_dict(q).get("id") != nq.id
             for q in session.questionsAsked[:next_idx]
         )
@@ -595,16 +774,7 @@ async def _handle_answer(
             next_idx += 1
             continue
         session.currentQuestionIndex = next_idx
-        next_question_msg = WSQuestionMessage(
-            sessionId=session_id,
-            id=nq.id,
-            text=nq.text,
-            difficulty=nq.difficulty,
-            order=nq.order,
-            speechType=nq.speechType,
-            audioBase64=await _tts(nq.text),
-        )
-        await websocket.send_json(next_question_msg.model_dump())
+        await _send_question_message(websocket, session_id, nq)
         return False
 
     session.currentQuestionIndex = next_idx
@@ -688,13 +858,13 @@ async def _handle_end_session(
     if reason == "time_expired":
         closing_text = (
             "Thank you for your time. The interview session has ended. "
-            "Your responses have been recorded. We wish you the best of luck!"
+            "Your responses have been recorded, and the team will follow up by email with next steps."
         )
     else:
         closing_text = (
             "Thank you for completing the interview. "
             "Your responses have been recorded and will be reviewed. "
-            "We wish you the best of luck!"
+            "Please watch your email for the next steps."
         )
     closing_audio = await _tts(closing_text)
 
@@ -737,6 +907,8 @@ async def _handle_mock_transition(
             topics=mock_data.get("topics", []),
             estimated_time=mock_data.get("estimatedTimeInMinutes", 30),
             difficulty=difficulty,
+            cv_skills=session.cvSkills,
+            cv_summary=session.cvSummary,
         )
     except Exception:
         intro_text = QuestionGenerator._fallback_intro(
@@ -744,22 +916,7 @@ async def _handle_mock_transition(
             mock_data.get("technologies", []),
         )
 
-    try:
-        questions = await question_gen.generate_questions(
-            mock_data=mock_data,
-            cv_skills=[],
-        )
-    except Exception:
-        questions = QuestionGenerator._fallback_questions(
-            mock_data.get("questions", []),
-            mock_type,
-            difficulty,
-        )
-
-    if not questions:
-        questions = QuestionGenerator._fallback_questions(
-            [], mock_type, difficulty,
-        )
+    questions = await _prepare_questions_for_current_mock(session)
 
     first_question = questions[0] if questions else Question(
         id="q1",
@@ -768,8 +925,6 @@ async def _handle_mock_transition(
         order=1,
         speechType="question",
     )
-
-    session.questionsAsked = [q.model_dump() for q in questions]
 
     intro_audio, first_q_audio = await tts_service.synthesize_many(
         [intro_text, first_question.text]

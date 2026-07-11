@@ -8,6 +8,8 @@ Generate a brief, welcoming introduction (2-3 sentences) that:
 2. Mentions the role/technologies being interviewed for
 3. Sets expectations about the interview format
 4. Sounds natural when read aloud (this will be spoken via text-to-speech)
+5. Explains that the interview will begin with a brief self-introduction before role-specific questions
+6. Does NOT ask the first technical, behavioral, or coding question
 
 Keep it concise — this is read aloud to the candidate, not a written document.
 

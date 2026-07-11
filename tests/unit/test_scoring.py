@@ -24,7 +24,6 @@ class TestTranscriptScorer:
                 "technical": 4,
                 "clarityOfExplanation": 3,
                 "structuredThinking": 4,
-                "askingClarifications": 3,
             },
             overallComment="Good technical understanding",
             feedback="Nice work!",
@@ -121,7 +120,6 @@ class TestTranscriptScorer:
         assert result.clarityOfExplanation == 60.0
         assert result.problemSolving == 0.0
         assert result.structuredThinking == 0.0
-        assert result.askingClarifications == 0.0
 
     @pytest.mark.asyncio
     async def test_score_with_none_active_dimensions_scores_all(self):
@@ -133,7 +131,6 @@ class TestTranscriptScorer:
                 "technical": 4,
                 "clarityOfExplanation": 3,
                 "structuredThinking": 4,
-                "askingClarifications": 3,
             },
             overallComment="Good",
             feedback="Nice",
@@ -157,7 +154,7 @@ class TestScoreAggregatorWeightedAverage:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
+            clarityOfExplanation=60, structuredThinking=80,
         )
         avg = agg.compute_weighted_average(transcript, audio=None, video=None)
         assert 0 <= avg <= 100
@@ -167,7 +164,7 @@ class TestScoreAggregatorWeightedAverage:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
+            clarityOfExplanation=60, structuredThinking=80,
         )
         audio = AudioScores(confidence=78, speaking=82)
         video = VideoScores(eyeContact=70)
@@ -179,7 +176,7 @@ class TestScoreAggregatorWeightedAverage:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
+            clarityOfExplanation=60, structuredThinking=80,
         )
         audio = AudioScores(confidence=78, speaking=82)
         avg_with_video = agg.compute_weighted_average(transcript, audio, VideoScores(eyeContact=70))
@@ -195,13 +192,13 @@ class TestScoreAggregatorWeightedAverage:
     def test_custom_weights(self):
         custom_weights = ScoreWeights(
             technical=50.0, communication=20.0, problemSolving=15.0,
-            clarityOfExplanation=5.0, structuredThinking=5.0,
-            askingClarifications=5.0, confidence=0.0, speaking=0.0, eyeContact=0.0,
+            clarityOfExplanation=10.0, structuredThinking=5.0,
+            confidence=0.0, speaking=0.0, eyeContact=0.0,
         )
         agg = ScoreAggregator(weights=custom_weights)
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=100,
-            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
+            clarityOfExplanation=60, structuredThinking=80,
         )
         avg = agg.compute_weighted_average(transcript, audio=None, video=None)
         assert avg == 85.0
@@ -257,7 +254,7 @@ class TestScoreAggregatorPerformance:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
+            clarityOfExplanation=60, structuredThinking=80,
         )
         adjustment = LLMAdjustment(adjustment=5.0, reason="Strong", confidence="medium")
         result = agg.compute_performance(transcript, llm_adjustment=adjustment)
@@ -267,7 +264,7 @@ class TestScoreAggregatorPerformance:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80, askingClarifications=60,
+            clarityOfExplanation=60, structuredThinking=80,
         )
         result = agg.compute_performance(transcript)
         assert result > 0

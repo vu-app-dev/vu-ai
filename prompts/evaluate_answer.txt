@@ -12,8 +12,7 @@ You must respond with valid JSON matching this exact schema:
     "problemSolving": <1-5>,
     "technical": <1-5>,
     "clarityOfExplanation": <1-5>,
-    "structuredThinking": <1-5>,
-    "askingClarifications": <1-5>
+    "structuredThinking": <1-5>
   }},
   "overallComment": "Brief overall assessment",
   "feedback": "3-5 word specific spoken feedback",
@@ -61,7 +60,13 @@ Current question difficulty: {difficulty}
 Question order: {order}
 Interview progress: Question {question_number} of approximately {total_questions}
 Mock section: {mock_number} of {total_mocks}
+Remaining time in current section: {remaining_time_seconds} seconds
 </interview_context>
+
+<candidate_intro_context>
+Candidate self-introduction, for context only:
+{candidate_intro}
+</candidate_intro_context>
 
 <conversation_history>
 Recent Q&A pairs (most recent first):
@@ -100,12 +105,15 @@ CLARIFICATION REQUESTS:
 - Do NOT score the candidate or treat clarification requests as answers.
 
 "I CAN'T ANSWER" / "I DON'T KNOW" HANDLING:
-- ONLY apply this rule if the candidate's transcript contains an EXPLICIT refusal like "I can't answer", "I don't know", "I have no idea", "I'm not sure about this at all", or the transcript is empty/near-empty (under 10 words with no substantive content).
+- Apply this rule if the candidate:
+  - Explicitly refuses: "I can't answer", "I don't know", "I have no idea", "I'm not sure about this at all"
+  - Implicitly declines: "I haven't used X", "I don't have experience with that", "I'm not familiar with this", "I haven't worked with that much"
+  - Gives an empty/near-empty response (under 10 words with no substantive content)
 - If the candidate provided ANY real explanation, examples, definitions, or technical content — even if incomplete or partially wrong — do NOT treat it as "no answer". Score it based on its actual quality (minimum level 2).
 - When this rule does apply:
   - Score 1 across all dimensions
-  - Set nextAction to "next_question" (NOT follow_up — do not force them to answer again)
-  - feedback: "That's okay, let's move to the next question."
+  - Set nextAction to "next_question" (NOT follow_up — do not force them to answer a topic they don't know)
+  - feedback: "Moving on to the next topic."
   - No strengths, areasToImprove notes what was missing
 
 FOLLOW-UP QUESTIONS:
@@ -124,6 +132,11 @@ NEXT QUESTION:
 - Also use next_question when the candidate said "I don't know" or gave no answer.
 - Also use next_question when the maximum follow-ups have been asked.
 - Do NOT use next_question for shallow or incorrect answers — use follow_up first.
+
+TIME MANAGEMENT:
+- If the remaining time is 60 seconds or less, do NOT request a new follow-up question.
+- If the remaining time is 60 seconds or less and this answer can be treated as the final response, set nextAction to "end".
+- If the remaining time is low, prefer moving forward over asking a deep follow-up.
 
 CONSISTENCY CHECK — before returning your response, verify:
 1. If the transcript contains real content (definitions, examples, explanations), scores must be >= 2 and feedback must NOT say "No answer given".

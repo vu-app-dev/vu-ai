@@ -60,6 +60,17 @@ class TestFallbackQuestions:
         assert result[0].difficulty == "HARD"
 
 
+class TestQuestionCountForTime:
+    def test_short_interview_gets_two_questions(self):
+        assert QuestionGenerator.question_count_for_time(10) == 2
+
+    def test_standard_interview_reserves_intro_and_closing_time(self):
+        assert QuestionGenerator.question_count_for_time(30) == 6
+
+    def test_long_interview_caps_questions(self):
+        assert QuestionGenerator.question_count_for_time(60) == 10
+
+
 class TestFallbackIntro:
     def test_technical_intro(self):
         intro = QuestionGenerator._fallback_intro("TECHNICAL", ["React"])
@@ -98,6 +109,24 @@ class TestGenerateQuestionsWithLLM:
         assert len(result) == 2
         assert result[0].text == "What is React?"
         assert result[0].speechType == "question"
+
+    @pytest.mark.asyncio
+    async def test_generate_questions_includes_candidate_intro_context(self):
+        mock_llm = AsyncMock()
+        mock_llm.generate_json = AsyncMock(return_value=_GenerateQuestionsResponse(
+            questions=[
+                _QuestionItem(id="q1", text="What is React?", difficulty="MEDIUM", order=1),
+            ]
+        ))
+        gen = QuestionGenerator(llm=mock_llm)
+        await gen.generate_questions(
+            MOCK_DATA,
+            cv_skills=["JavaScript"],
+            candidate_intro="I built dashboards with React and Node.",
+        )
+        prompt = mock_llm.generate_json.call_args.args[0]
+        assert "I built dashboards with React and Node." in prompt
+        assert "topicTag" in prompt
 
     @pytest.mark.asyncio
     async def test_generate_questions_llm_failure_fallback(self):

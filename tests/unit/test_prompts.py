@@ -145,6 +145,17 @@ class TestJsonOutputSchema:
                                topics=["frontend"], estimated_time_minutes=30,
                                num_questions=3, cv_skills=["JavaScript"])
         assert "questions" in prompt
+        assert "topicTag" in prompt
+
+    def test_generate_questions_prompt_includes_candidate_intro_context(self):
+        prompt = format_prompt("generate_questions", mock_type="TECHNICAL",
+                               difficulty="MEDIUM", technologies=["React"],
+                               topics=["frontend"], estimated_time_minutes=30,
+                               num_questions=3, cv_skills=["JavaScript"],
+                               candidate_intro="I build frontend dashboards.")
+        assert "Candidate self-introduction" in prompt
+        assert "I build frontend dashboards." in prompt
+        assert "diverse interview topics" in prompt.lower()
 
     def test_cv_prompt_specifies_json_schema(self):
         prompt = format_prompt("analyze_cv",
@@ -232,4 +243,3 @@ class TestActiveDimensions:
         assert "Technical Knowledge (technical)" in anchors
         assert "Problem Solving (problemSolving)" in anchors
         assert "Structured Thinking (structuredThinking)" in anchors
-        assert "Critical Thinking (askingClarifications)" in anchors

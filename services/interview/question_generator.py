@@ -29,6 +29,7 @@ class _QuestionItem(BaseModel):
     difficulty: str = "MEDIUM"
     order: int = 1
     activeDimensions: list[str] | None = None
+    topicTag: str | None = None
 
 
 class _GenerateQuestionsResponse(BaseModel):
@@ -47,6 +48,7 @@ class QuestionGenerator:
         self,
         mock_data: dict[str, Any],
         cv_skills: list[str] | None = None,
+        candidate_intro: str = "",
     ) -> list[Question]:
         mock_questions = mock_data.get("questions", [])
         mock_type = mock_data.get("type", "TECHNICAL")
@@ -55,9 +57,9 @@ class QuestionGenerator:
         topics = _normalize_str_list(mock_data.get("topics", []))
         estimated_time = mock_data.get("estimatedTimeInMinutes", 30)
         mock_description = mock_data.get("description", "")
+        num_questions = self.question_count_for_time(estimated_time)
 
         try:
-            num_questions = max(5, min(10, estimated_time // 3))
             existing = self._format_existing_questions(mock_questions)
 
             logger.info(
@@ -77,6 +79,7 @@ class QuestionGenerator:
                 estimated_time_minutes=estimated_time,
                 num_questions=num_questions,
                 cv_skills=cv_skills or [],
+                candidate_intro=candidate_intro or "No self-introduction provided yet.",
                 existing_questions=existing,
                 cv_skills_section="CV Skills: " + ", ".join(cv_skills) if cv_skills else "",
             )
@@ -95,14 +98,15 @@ class QuestionGenerator:
                         order=q.order,
                         speechType="question",
                         activeDimensions=q.activeDimensions,
+                        topicTag=q.topicTag,
                     )
-                    for q in response.questions
+                    for q in response.questions[:num_questions]
                 ]
 
         except Exception as e:
             logger.warning("LLM question generation failed, using fallback: %s", e)
 
-        return self._fallback_questions(mock_questions, mock_type, difficulty)
+        return self._fallback_questions(mock_questions, mock_type, difficulty)[:num_questions]
 
     async def generate_intro(
         self,
@@ -138,6 +142,17 @@ class QuestionGenerator:
             logger.warning("LLM intro generation failed, using fallback: %s", e)
 
         return self._fallback_intro(mock_type, technologies or [])
+
+    @staticmethod
+    def question_count_for_time(estimated_time_minutes: int | float | None) -> int:
+        try:
+            estimated = int(estimated_time_minutes or 30)
+        except (TypeError, ValueError):
+            estimated = 30
+        usable_minutes = max(0, estimated - 3)  # 2 min intro + 1 min closing reserve.
+        count = usable_minutes // 4
+        minimum = 2 if estimated < 12 else 3
+        return max(minimum, min(10, count))
 
     @staticmethod
     def _format_existing_questions(questions: list) -> str:
@@ -176,12 +191,13 @@ class QuestionGenerator:
                     difficulty=q_difficulty,
                     order=i,
                     speechType="question",
+                    topicTag=(q.get("title") if isinstance(q, dict) else None),
                 ))
             return questions
 
         _ALL = None
         _KNOWLEDGE = ["technical", "communication", "clarityOfExplanation"]
-        _SCENARIO = ["technical", "communication", "clarityOfExplanation", "problemSolving", "structuredThinking", "askingClarifications"]
+        _SCENARIO = ["technical", "communication", "clarityOfExplanation", "problemSolving", "structuredThinking"]
         _COMPARISON = ["technical", "communication", "clarityOfExplanation", "structuredThinking"]
         _BEHAVIORAL = ["communication", "clarityOfExplanation", "structuredThinking"]
 
@@ -220,7 +236,7 @@ class QuestionGenerator:
         return [
             Question(
                 id=f"q{i}", text=text, difficulty=difficulty, order=i,
-                speechType="question", activeDimensions=dims,
+                speechType="question", activeDimensions=dims, topicTag=text.split("?")[0][:60],
             )
             for i, (text, dims) in enumerate(question_entries, 1)
         ]

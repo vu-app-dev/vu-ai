@@ -31,18 +31,18 @@ class TestFaceAnalysisResult:
 
 
 class TestFaceAnalyzer:
-    def test_unavailable_when_mediapipe_missing(self):
-        analyzer = FaceAnalyzer(model_path="/nonexistent/model.task")
+    def test_unavailable_when_model_missing(self):
+        analyzer = FaceAnalyzer(model_path="/nonexistent/model.onnx")
         assert analyzer.available is False
 
     def test_analyze_base64_invalid_data_returns_default(self):
-        analyzer = FaceAnalyzer(model_path="/nonexistent/model.task")
+        analyzer = FaceAnalyzer(model_path="/nonexistent/model.onnx")
         result = analyzer.analyze_base64("not-valid-base64")
         assert result.face_detected is False
         assert result.eye_contact is None
 
     def test_analyze_frame_invalid_bytes_returns_default(self):
-        analyzer = FaceAnalyzer(model_path="/nonexistent/model.task")
+        analyzer = FaceAnalyzer(model_path="/nonexistent/model.onnx")
         result = analyzer.analyze_frame(b"not-an-image")
         assert result.face_detected is False
 

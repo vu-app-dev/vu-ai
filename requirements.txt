@@ -15,5 +15,3 @@ python-docx>=1.1.0
 edge-tts>=7.0.0
 opencv-python-headless>=4.8.0
 numpy>=1.24.0
-# mediapipe — only for precise iris tracking (no ARM64 wheels; YuNet fallback used on ARM64)
-# Install locally: pip install mediapipe>=0.10.0

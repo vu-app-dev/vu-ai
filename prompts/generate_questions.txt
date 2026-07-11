@@ -12,7 +12,8 @@ You must respond with valid JSON matching this schema:
       "difficulty": "EASY" | "MEDIUM" | "HARD",
       "order": 1,
       "speechType": "question",
-      "activeDimensions": ["dimension1", "dimension2", ...]
+      "activeDimensions": ["dimension1", "dimension2", ...],
+      "topicTag": "short topic label"
     }}
   ]
 }}
@@ -38,6 +39,10 @@ Estimated time: {estimated_time_minutes} minutes
 7. Tailor questions to the candidate's skills when CV data is available
 8. Do not repeat or paraphrase existing questions
 9. CRITICAL: All questions must be answerable VERBALLY. The candidate speaks their answer — they cannot write code, draw diagrams, or share a screen. Ask questions that can be explained in words (concepts, trade-offs, reasoning, experience). NEVER ask the candidate to "write", "implement", "code", or "type" anything.
+10. Cover diverse interview topics. Do not cluster multiple questions around the same narrow concept unless the mock has only one topic.
+11. Spread questions across technologies, topics, mock context, CV skills, and the candidate self-introduction when available.
+12. Assign a concise "topicTag" to every question, such as "React hooks", "API trade-offs", "debugging", "teamwork", or "system design".
+13. Avoid using the candidate self-introduction as a script to follow; use it only to choose relevant, non-repetitive topics.
 </question_requirements>
 
 <active_dimensions_guide>
@@ -46,14 +51,13 @@ Each question must include an "activeDimensions" array listing ONLY the dimensio
 - "problemSolving" — ability to break down problems, consider approaches, and find solutions
 - "technical" — accuracy and depth of technical/domain knowledge
 - "clarityOfExplanation" — how well-structured and followable the explanation is
-- "structuredThinking" — use of systematic frameworks, organized reasoning
-- "askingClarifications" — critical thinking: questioning assumptions, identifying edge cases, analytical depth
+- "structuredThinking" — use of systematic frameworks, organized reasoning, critical analysis of assumptions and edge cases
 
 Rules for assigning dimensions:
 - Knowledge recall questions ("What is X?", "Define Y", "Explain Z"): ["technical", "communication", "clarityOfExplanation"]
 - Conceptual comparison ("Compare X vs Y", "Trade-offs between A and B"): ["technical", "communication", "clarityOfExplanation", "structuredThinking"]
-- Applied/scenario questions ("How would you handle X?", "Design a system for Y"): all 6 dimensions
-- Debugging/troubleshooting ("Your system has X problem, what do you do?"): ["technical", "problemSolving", "structuredThinking", "askingClarifications", "communication"]
+- Applied/scenario questions ("How would you handle X?", "Design a system for Y"): all 5 dimensions
+- Debugging/troubleshooting ("Your system has X problem, what do you do?"): ["technical", "problemSolving", "structuredThinking", "communication"]
 - Behavioral/experience ("Tell me about a time when..."): ["communication", "clarityOfExplanation", "structuredThinking"]
 - Every question MUST include at least "technical" and "communication"
 </active_dimensions_guide>
@@ -64,6 +68,7 @@ Rules for assigning dimensions:
 
 <candidate_content>
 CV Skills: {cv_skills}
+Candidate self-introduction: {candidate_intro}
 </candidate_content>
 
 Generate the questions now as valid JSON:

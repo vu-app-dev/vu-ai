@@ -249,14 +249,14 @@ class TestScoringModels:
     def test_transcript_scores_clamped(self):
         scores = TranscriptScores(
             communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            clarityOfExplanation=65, structuredThinking=72,
         )
         assert 0 <= scores.communication <= 100
 
     def test_transcript_scores_over_100_clamped(self):
         scores = TranscriptScores(
             communication=150, problemSolving=-10, technical=75,
-            clarityOfExplanation=65, structuredThinking=72, askingClarifications=60,
+            clarityOfExplanation=65, structuredThinking=72,
         )
         assert scores.communication == 100.0
         assert scores.problemSolving == 0.0

@@ -45,7 +45,7 @@ class TestAudioScorerScore:
 
     def test_many_fillers(self):
         result = AudioScorer().score(word_count=150, duration_seconds=120, filler_count=20)
-        assert result.confidence < 30
+        assert result.confidence < 80
 
     def test_many_pauses(self):
         result = AudioScorer().score(word_count=150, duration_seconds=120, pause_count=50)

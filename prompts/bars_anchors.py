@@ -36,13 +36,6 @@ UNIVERSAL_ANCHORS = {
         "Systematically organizes thoughts; uses a clear methodology or framework",
         "Highly disciplined thinking; structures the response optimally for the question type",
     ],
-    "askingClarifications": [
-        "Shows no analytical depth; accepts everything at face value without reflection",
-        "Minimal critical thinking; occasionally questions an assumption but doesn't follow through",
-        "Demonstrates reasonable analytical thinking; identifies obvious gaps or assumptions",
-        "Strong critical thinking; questions assumptions, identifies edge cases, and probes deeper",
-        "Exceptional analytical depth; surfaces non-obvious issues, challenges premises thoughtfully",
-    ],
 }
 
 TECHNICAL_ANCHORS = {
@@ -80,13 +73,6 @@ TECHNICAL_ANCHORS = {
         "Follows a recognizable approach; considers inputs, outputs, and basic constraints",
         "Methodical; breaks the problem into components, addresses each systematically",
         "Rigorous engineering thinking; requirements, design, trade-offs, validation, and iteration",
-    ],
-    "askingClarifications": [
-        "Accepts the problem statement at face value; no analytical depth shown",
-        "Asks superficial questions; doesn't probe technical constraints or requirements",
-        "Identifies basic assumptions; questions some requirements or constraints",
-        "Probes technical constraints, scalability concerns, and requirement ambiguities",
-        "Surfaces non-obvious technical issues; challenges assumptions about scale, failure modes, and edge cases",
     ],
 }
 
@@ -126,13 +112,6 @@ BEHAVIORAL_ANCHORS = {
         "Clear STAR structure; systematically covers situation, task, action, and result",
         "Exceptional structure; layers multiple insights, connects to broader lessons learned",
     ],
-    "askingClarifications": [
-        "No reflection or self-awareness; describes events without analyzing their role",
-        "Minimal reflection; attributes outcomes to external factors without self-examination",
-        "Shows basic self-awareness; acknowledges their strengths and weaknesses in the situation",
-        "Strong reflection; analyzes what they would do differently and why",
-        "Deep self-awareness; critically examines their assumptions, biases, and growth areas",
-    ],
 }
 
 CODING_ANCHORS = {
@@ -171,13 +150,6 @@ CODING_ANCHORS = {
         "Systematic: clarifies constraints, considers approaches, selects and justifies one, traces through examples",
         "Rigorous: requirements, approach comparison, pseudocode walkthrough, complexity analysis, testing strategy",
     ],
-    "askingClarifications": [
-        "Dives into coding without questioning any constraints or assumptions",
-        "Asks about basic input format but misses important constraints",
-        "Identifies key constraints; asks about input size, edge cases, or expected output",
-        "Probes thoroughly; questions assumptions about input ranges, duplicates, error handling",
-        "Exceptional; uncovers hidden constraints, discusses trade-offs between requirements, identifies ambiguities",
-    ],
 }
 
 _ANCHOR_SETS = {
@@ -192,7 +164,6 @@ _DIMENSION_LABELS = {
     "technical": "Technical Knowledge",
     "clarityOfExplanation": "Clarity of Explanation",
     "structuredThinking": "Structured Thinking",
-    "askingClarifications": "Critical Thinking",
 }
 
 

@@ -11,11 +11,14 @@ class StartSessionRequest(BaseModel):
     cvUrl: str = ""
     mockData: Optional[dict] = None
     mocks: Optional[list[dict]] = None
+    skipIntro: bool = False
+    candidateIntro: str = ""
+    previousQuestions: list[str] = Field(default_factory=list)
 
 
 ALL_TRANSCRIPT_DIMENSIONS = [
     "communication", "problemSolving", "technical",
-    "clarityOfExplanation", "structuredThinking", "askingClarifications",
+    "clarityOfExplanation", "structuredThinking",
 ]
 
 
@@ -26,6 +29,7 @@ class Question(BaseModel):
     order: int
     speechType: Literal["question", "follow_up"] = "question"
     activeDimensions: list[str] | None = None
+    topicTag: Optional[str] = None
 
 
 class CheatEvidence(BaseModel):
@@ -99,6 +103,7 @@ class WSQuestionMessage(WSMessage):
     difficulty: Literal["EASY", "MEDIUM", "HARD"]
     order: int
     speechType: Literal["question", "follow_up"] = "question"
+    topicTag: Optional[str] = None
     audioBase64: Optional[str] = None
 
 

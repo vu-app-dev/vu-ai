@@ -5,55 +5,98 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from models.interview import Question, StartSessionRequest
 from models.scoring import AudioScores, TranscriptScores
+from routers.interview import start_session
 from services.interview.session_manager import SessionManager
 
 client = TestClient(app)
 
 
 class TestStartSession:
-    def test_start_uses_fallback_when_backend_unreachable(self):
-        with patch("routers.interview.backend_client") as mock_bc:
-            mock_bc.get_mock = AsyncMock(return_value=None)
-            response = client.post("/api/interview/start", json={
-                "mockId": "mock-1",
-                "candidateId": "c1",
-                "cvUrl": "https://example.com/cv.pdf",
-            })
-            assert response.status_code == 200
-            data = response.json()
-            assert "sessionId" in data
-            assert "sessionToken" in data
-            assert data["intro"] is not None
+    @staticmethod
+    def _mock_question_generator():
+        mock_gen = MagicMock()
+        mock_gen.generate_intro = AsyncMock(return_value="Welcome to the interview.")
+        mock_gen.generate_questions = AsyncMock(return_value=[
+            Question(
+                id="q1",
+                text="Explain a React performance trade-off.",
+                difficulty="MEDIUM",
+                order=1,
+                speechType="question",
+            )
+        ])
+        return mock_gen
 
-    def test_start_multi_mock_returns_totalMocks(self):
-        with patch("routers.interview.backend_client") as mock_bc:
+    @pytest.mark.asyncio
+    async def test_start_uses_fallback_when_backend_unreachable(self):
+        with patch("routers.interview.backend_client") as mock_bc, \
+             patch("routers.interview._get_question_generator", return_value=self._mock_question_generator()), \
+             patch("routers.interview.tts_service") as mock_tts:
+            mock_tts.synthesize_many = AsyncMock(return_value=(None, None))
             mock_bc.get_mock = AsyncMock(return_value=None)
-            response = client.post("/api/interview/start", json={
-                "candidateId": "c1",
-                "cvUrl": "https://example.com/cv.pdf",
-                "mocks": [
+            result = await start_session(StartSessionRequest(
+                mockId="mock-1",
+                candidateId="c1",
+                cvUrl="",
+            ))
+            assert result.sessionId
+            assert result.sessionToken
+            assert result.intro is not None
+            assert result.firstQuestion.id == "intro"
+
+    @pytest.mark.asyncio
+    async def test_start_skip_intro_returns_real_question(self):
+        mock_gen = self._mock_question_generator()
+        mock_gen.generate_intro = AsyncMock(return_value="Welcome back.")
+        with patch("routers.interview.backend_client") as mock_bc, \
+             patch("routers.interview._get_question_generator", return_value=mock_gen), \
+             patch("routers.interview.tts_service") as mock_tts:
+            mock_tts.synthesize_many = AsyncMock(return_value=(None, None))
+            mock_bc.get_mock = AsyncMock(return_value=None)
+            result = await start_session(StartSessionRequest(
+                mockId="mock-1",
+                candidateId="c1",
+                cvUrl="",
+                skipIntro=True,
+                candidateIntro="I am a React engineer.",
+            ))
+            assert result.firstQuestion.id == "q1"
+            assert "React performance" in result.firstQuestion.text
+
+    @pytest.mark.asyncio
+    async def test_start_multi_mock_returns_totalMocks(self):
+        with patch("routers.interview.backend_client") as mock_bc, \
+             patch("routers.interview._get_question_generator", return_value=self._mock_question_generator()), \
+             patch("routers.interview.tts_service") as mock_tts:
+            mock_tts.synthesize_many = AsyncMock(return_value=(None, None))
+            mock_bc.get_mock = AsyncMock(return_value=None)
+            result = await start_session(StartSessionRequest(
+                candidateId="c1",
+                cvUrl="",
+                mocks=[
                     {"mockId": "m1", "mockData": {"type": "TECHNICAL", "estimatedTimeInMinutes": 15}},
                     {"mockId": "m2", "mockData": {"type": "BEHAVIORAL", "estimatedTimeInMinutes": 15}},
                 ],
-            })
-            assert response.status_code == 200
-            data = response.json()
-            assert data["mockIndex"] == 0
-            assert data["totalMocks"] == 2
+            ))
+            assert result.mockIndex == 0
+            assert result.totalMocks == 2
 
-    def test_start_single_mock_backward_compat(self):
-        with patch("routers.interview.backend_client") as mock_bc:
+    @pytest.mark.asyncio
+    async def test_start_single_mock_backward_compat(self):
+        with patch("routers.interview.backend_client") as mock_bc, \
+             patch("routers.interview._get_question_generator", return_value=self._mock_question_generator()), \
+             patch("routers.interview.tts_service") as mock_tts:
+            mock_tts.synthesize_many = AsyncMock(return_value=(None, None))
             mock_bc.get_mock = AsyncMock(return_value=None)
-            response = client.post("/api/interview/start", json={
-                "mockId": "mock-1",
-                "candidateId": "c1",
-                "cvUrl": "https://example.com/cv.pdf",
-            })
-            assert response.status_code == 200
-            data = response.json()
-            assert data["mockIndex"] == 0
-            assert data["totalMocks"] == 1
+            result = await start_session(StartSessionRequest(
+                mockId="mock-1",
+                candidateId="c1",
+                cvUrl="",
+            ))
+            assert result.mockIndex == 0
+            assert result.totalMocks == 1
 
 
 class TestEndSessionREST:
@@ -108,7 +151,7 @@ class TestSessionManagerIntegration:
         answer.score = 80.0
         answer.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=60.0, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=80.0, askingClarifications=60.0,
+            clarityOfExplanation=60.0, structuredThinking=80.0,
         )
         answer.audioScores = AudioScores(confidence=70.0, speaking=75.0)
 

@@ -11,7 +11,6 @@ class TranscriptScores(BaseModel):
     technical: float = 0.0
     clarityOfExplanation: float = 0.0
     structuredThinking: float = 0.0
-    askingClarifications: float = 0.0
 
     @field_validator("*", mode="after")
     @classmethod
@@ -43,14 +42,13 @@ class VideoScores(BaseModel):
 
 
 class ScoreWeights(BaseModel):
-    technical: float = 20.0
-    communication: float = 15.0
-    problemSolving: float = 15.0
-    clarityOfExplanation: float = 10.0
-    structuredThinking: float = 10.0
-    askingClarifications: float = 7.0
+    technical: float = 22.0
+    communication: float = 17.0
+    problemSolving: float = 17.0
+    clarityOfExplanation: float = 12.0
+    structuredThinking: float = 12.0
     confidence: float = 8.0
-    speaking: float = 7.0
+    speaking: float = 4.0
     eyeContact: float = 8.0
 
     @field_validator("*", mode="after")
@@ -92,7 +90,6 @@ class PerformanceResult(BaseModel):
     technical: Optional[float] = None
     clarityOfExplanation: Optional[float] = None
     structuredThinking: Optional[float] = None
-    askingClarifications: Optional[float] = None
     confidence: Optional[float] = None
     speaking: Optional[float] = None
     eyeContact: Optional[float] = None

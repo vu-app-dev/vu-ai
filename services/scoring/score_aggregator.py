@@ -46,8 +46,7 @@ class ScoreAggregator:
             if weight == 0:
                 continue
             if field_name in ("communication", "problemSolving", "technical",
-                            "clarityOfExplanation", "structuredThinking",
-                            "askingClarifications"):
+                            "clarityOfExplanation", "structuredThinking"):
                 values[field_name] = getattr(transcript, field_name)
             elif field_name == "confidence":
                 values[field_name] = audio.confidence if audio and audio.confidence is not None else 0

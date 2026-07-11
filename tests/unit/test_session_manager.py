@@ -101,6 +101,16 @@ class TestAddAnswer:
             mgr.add_answer("unknown", "q1", "text", 60, "t1", "t2")
 
 
+class TestCompleteIntro:
+    def test_complete_intro_stores_context_without_answer(self):
+        mgr = SessionManager()
+        session = mgr.create_session(mock_id="m1", candidate_id="c1", cv_url="https://cv.example.com")
+        mgr.complete_intro(session.id, "I am a frontend engineer with React experience.")
+        assert session.introCompleted is True
+        assert "frontend engineer" in session.candidateIntroTranscript
+        assert session.answers == []
+
+
 class TestAddTabSwitch:
     def test_add_tab_switch(self):
         mgr = SessionManager()
@@ -174,7 +184,7 @@ class TestEndSession:
         answer.score = 80.0
         answer.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=80.0, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=80.0, askingClarifications=60.0,
+            clarityOfExplanation=60.0, structuredThinking=80.0,
         )
 
         result = await mgr.end_session(session.id)
@@ -416,7 +426,7 @@ class TestMultiMockSession:
         answer1.score = 80.0
         answer1.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=80.0, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=80.0, askingClarifications=60.0,
+            clarityOfExplanation=60.0, structuredThinking=80.0,
         )
         mgr.transition_to_next_mock(session.id)
         mgr.add_answer(session.id, "q2", " ".join(["leadership"] * 130), 60, "t3", "t4")
@@ -425,7 +435,7 @@ class TestMultiMockSession:
         answer2.score = 85.0
         answer2.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=60.0, technical=60.0,
-            clarityOfExplanation=80.0, structuredThinking=80.0, askingClarifications=80.0,
+            clarityOfExplanation=80.0, structuredThinking=80.0,
         )
         result = await mgr.end_session(session.id)
         assert result.score > 0
@@ -443,7 +453,7 @@ class TestMultiMockSession:
         answer1.score = 80.0
         answer1.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=0.0, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=0.0, askingClarifications=0.0,
+            clarityOfExplanation=60.0, structuredThinking=0.0,
         )
         answer1.activeDimensions = ["technical", "communication", "clarityOfExplanation"]
 
@@ -453,7 +463,7 @@ class TestMultiMockSession:
         answer2.score = 80.0
         answer2.transcriptScores = TranscriptScores(
             communication=60.0, problemSolving=80.0, technical=100.0,
-            clarityOfExplanation=80.0, structuredThinking=80.0, askingClarifications=80.0,
+            clarityOfExplanation=80.0, structuredThinking=80.0,
         )
         answer2.activeDimensions = None  # all dimensions active
 
@@ -463,7 +473,6 @@ class TestMultiMockSession:
         assert result.clarityOfExplanation == 70.0  # (60+80)/2
         assert result.problemSolving == 80.0  # only q2 tested it
         assert result.structuredThinking == 80.0  # only q2
-        assert result.askingClarifications == 80.0  # only q2
 
 
 class TestSpeakerDiarizationInEndSession:

@@ -10,10 +10,10 @@ FILLER_WORDS = frozenset({
     "i mean", "right", "okay so", "well",
 })
 
-SLOW_WPM = 80
-FAST_WPM = 160
-IDEAL_WPM = 130
-MAX_FILLER_PER_MINUTE = 15
+SLOW_WPM = 60
+FAST_WPM = 180
+IDEAL_WPM = 120
+MAX_FILLER_PER_MINUTE = 20
 
 
 class AudioScorer:
@@ -47,16 +47,16 @@ class AudioScorer:
         wpm_score = 0.0
         if SLOW_WPM <= wpm <= FAST_WPM:
             ideal_dist = abs(wpm - IDEAL_WPM)
-            max_dist = IDEAL_WPM - SLOW_WPM
-            wpm_score = max(0.0, 100 - (ideal_dist / max_dist) * 40)
+            max_dist = max(IDEAL_WPM - SLOW_WPM, FAST_WPM - IDEAL_WPM)
+            wpm_score = max(0.0, 100 - (ideal_dist / max_dist) * 25)
         elif wpm > FAST_WPM:
-            wpm_score = max(20.0, 60 - (wpm - FAST_WPM) * 2)
+            wpm_score = max(30.0, 75 - (wpm - FAST_WPM) * 1.5)
         else:
-            wpm_score = max(10.0, wpm / SLOW_WPM * 40)
+            wpm_score = max(20.0, wpm / SLOW_WPM * 60)
 
         duration_minutes = duration_seconds / 60
         filler_rate = filler_count / max(duration_minutes, 0.1)
-        filler_penalty = min(filler_rate / MAX_FILLER_PER_MINUTE, 1.0) * 30
+        filler_penalty = min(filler_rate / MAX_FILLER_PER_MINUTE, 1.0) * 15
 
         return max(0.0, min(100.0, wpm_score - filler_penalty))
 
