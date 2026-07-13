@@ -348,8 +348,8 @@ class TestEndSession:
             await mgr.end_session(session.id)
 
         payload = mock_bc.create_performance.call_args.kwargs["data"]
-        assert payload["eyeContact"] is None
         assert payload["communication"] is None
+        assert payload["structuredThinking"] is None
 
 
 class TestCleanupExpired:
@@ -554,9 +554,9 @@ class TestMultiMockSession:
         answer1.score = 80.0
         answer1.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=None, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=None,
+            structuredThinking=None,
         )
-        answer1.activeDimensions = ["technical", "communication", "clarityOfExplanation"]
+        answer1.activeDimensions = ["technical", "communication"]
 
         mgr.add_answer(session.id, "q2", " ".join(["word"] * 130), 60, "t3", "t4")
         answer2 = session.mocks[0].answers[1]
@@ -564,7 +564,7 @@ class TestMultiMockSession:
         answer2.score = 80.0
         answer2.transcriptScores = TranscriptScores(
             communication=60.0, problemSolving=80.0, technical=100.0,
-            clarityOfExplanation=80.0, structuredThinking=80.0,
+            structuredThinking=80.0,
         )
         answer2.activeDimensions = None  # all dimensions active
 
@@ -573,7 +573,6 @@ class TestMultiMockSession:
             result = await mgr.end_session(session.id)
         assert result.communication == 70.0  # (80+60)/2
         assert result.technical == 90.0  # (80+100)/2
-        assert result.clarityOfExplanation == 70.0  # (60+80)/2
         assert result.problemSolving == 80.0  # only q2 tested it
         assert result.structuredThinking == 80.0  # only q2
 

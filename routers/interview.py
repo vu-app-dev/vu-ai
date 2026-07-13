@@ -238,7 +238,7 @@ def _build_intro_question() -> Question:
         difficulty="EASY",
         order=0,
         speechType="question",
-        activeDimensions=["communication", "clarityOfExplanation", "structuredThinking"],
+        activeDimensions=["communication", "structuredThinking"],
         topicTag="self-introduction",
     )
 

@@ -55,7 +55,6 @@ class TranscriptScorer:
                 communication=0.0,
                 problemSolving=0.0,
                 technical=0.0,
-                clarityOfExplanation=0.0,
                 structuredThinking=0.0,
             ), None
 
@@ -90,7 +89,7 @@ class TranscriptScorer:
             if response and response.scores:
                 all_dims = [
                     "communication", "problemSolving", "technical",
-                    "clarityOfExplanation", "structuredThinking",
+                    "structuredThinking",
                 ]
                 score_vals = {}
                 for dim in all_dims:

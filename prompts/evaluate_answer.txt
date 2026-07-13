@@ -11,7 +11,6 @@ Respond with valid JSON:
     "communication": <1-5>,
     "problemSolving": <1-5>,
     "technical": <1-5>,
-    "clarityOfExplanation": <1-5>,
     "structuredThinking": <1-5>
   }},
   "overallComment": "Brief overall assessment",

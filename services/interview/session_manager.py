@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from models.interview import CheatClassification, CheatEvidence, ALL_TRANSCRIPT_DIMENSIONS
-from models.scoring import AudioScores, PerformanceResult, TranscriptScores, VideoScores
+from models.scoring import AudioScores, PerformanceResult, TranscriptScores
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +419,6 @@ class SessionManager:
                 gaze_horizontal=fr.get("gaze_horizontal"),
             ))
 
-        video_scores = video_scorer.compute_session_scores(parsed_frames)
         cheat_metrics = video_scorer.compute_cheat_metrics(parsed_frames)
 
         speaker_count = None
@@ -449,7 +448,7 @@ class SessionManager:
             second_speaker_pct=second_speaker_pct,
         )
 
-        weighted_avg = score_aggregator.compute_weighted_average(avg_transcript, audio_scores, video_scores)
+        weighted_avg = score_aggregator.compute_weighted_average(avg_transcript, audio_scores)
 
         question_results = "\n".join(
             f"Q{i+1} ({a.questionId}): score={a.score:.1f}, feedback={a.aiFeedback}"
@@ -472,7 +471,7 @@ class SessionManager:
         except Exception as e:
             logger.warning("LLM adjustment failed: %s", e)
 
-        final_score = score_aggregator.compute_performance(avg_transcript, audio_scores, video_scores, llm_adjustment)
+        final_score = score_aggregator.compute_performance(avg_transcript, audio_scores, llm_adjustment)
 
         overall_summary = None
         try:
@@ -491,11 +490,8 @@ class SessionManager:
             communication=avg_transcript.communication,
             problemSolving=avg_transcript.problemSolving,
             technical=avg_transcript.technical,
-            clarityOfExplanation=avg_transcript.clarityOfExplanation,
             structuredThinking=avg_transcript.structuredThinking,
             confidence=audio_scores.confidence,
-            speaking=audio_scores.speaking,
-            eyeContact=video_scores.eyeContact,
             cheat=cheat,
             llmAdjustment=llm_adjustment,
             overallSummary=overall_summary,

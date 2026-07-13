@@ -215,10 +215,10 @@ class TestActiveDimensions:
         prompt = format_prompt("evaluate_answer", question="Explain React",
                                transcript="React is a library", duration_seconds=60,
                                mock_type="TECHNICAL", difficulty="MEDIUM", order=1)
-        assert "Score ALL five dimensions" in prompt
+        assert "Score ALL four dimensions" in prompt
 
     def test_evaluate_prompt_with_active_dimensions(self):
-        dims = ["technical", "communication", "clarityOfExplanation"]
+        dims = ["technical", "communication", "structuredThinking"]
         prompt = format_prompt("evaluate_answer", question="Explain React",
                                transcript="React is a library", duration_seconds=60,
                                mock_type="TECHNICAL", difficulty="MEDIUM", order=1,
@@ -226,7 +226,7 @@ class TestActiveDimensions:
         assert "ACTIVE DIMENSIONS" in prompt
         assert "technical" in prompt
         assert "communication" in prompt
-        assert "clarityOfExplanation" in prompt
+        assert "structuredThinking" in prompt
         assert "Only score these dimensions" in prompt
 
     def test_bars_anchors_filtered_by_active_dimensions(self):

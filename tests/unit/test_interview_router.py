@@ -151,9 +151,9 @@ class TestSessionManagerIntegration:
         answer.score = 80.0
         answer.transcriptScores = TranscriptScores(
             communication=80.0, problemSolving=60.0, technical=80.0,
-            clarityOfExplanation=60.0, structuredThinking=80.0,
+            structuredThinking=80.0,
         )
-        answer.audioScores = AudioScores(confidence=70.0, speaking=75.0)
+        answer.audioScores = AudioScores(confidence=70.0)
 
         result = await mgr.end_session(session.id)
         assert result.cheat.level == "Flagged"

@@ -202,10 +202,10 @@ class QuestionGenerator:
             return questions
 
         _ALL = None
-        _KNOWLEDGE = ["technical", "communication", "clarityOfExplanation"]
-        _SCENARIO = ["technical", "communication", "clarityOfExplanation", "problemSolving", "structuredThinking"]
-        _COMPARISON = ["technical", "communication", "clarityOfExplanation", "structuredThinking"]
-        _BEHAVIORAL = ["communication", "clarityOfExplanation", "structuredThinking"]
+        _KNOWLEDGE = ["technical", "communication"]
+        _SCENARIO = ["technical", "communication", "problemSolving", "structuredThinking"]
+        _COMPARISON = ["technical", "communication", "structuredThinking"]
+        _BEHAVIORAL = ["communication", "structuredThinking"]
 
         templates = {
             "TECHNICAL": [

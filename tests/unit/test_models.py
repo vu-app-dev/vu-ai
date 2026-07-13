@@ -77,7 +77,7 @@ class TestQuestion:
         assert q.activeDimensions is None
 
     def test_active_dimensions_with_values(self):
-        dims = ["technical", "communication", "clarityOfExplanation"]
+        dims = ["technical", "communication", "structuredThinking"]
         q = Question(id="q1", text="Test", difficulty="MEDIUM", order=1, activeDimensions=dims)
         assert q.activeDimensions == dims
         assert len(q.activeDimensions) == 3
@@ -251,22 +251,21 @@ class TestScoringModels:
     def test_transcript_scores_clamped(self):
         scores = TranscriptScores(
             communication=80, problemSolving=70, technical=75,
-            clarityOfExplanation=65, structuredThinking=72,
+            structuredThinking=72,
         )
         assert 0 <= scores.communication <= 100
 
     def test_transcript_scores_over_100_clamped(self):
         scores = TranscriptScores(
             communication=150, problemSolving=-10, technical=75,
-            clarityOfExplanation=65, structuredThinking=72,
+            structuredThinking=72,
         )
         assert scores.communication == 100.0
         assert scores.problemSolving == 0.0
 
     def test_audio_scores_with_none(self):
-        scores = AudioScores(confidence=70, speaking=None)
-        assert scores.confidence == 70.0
-        assert scores.speaking is None
+        scores = AudioScores(confidence=None)
+        assert scores.confidence is None
 
     def test_video_scores_null(self):
         scores = VideoScores(eyeContact=None)
@@ -280,20 +279,19 @@ class TestScoringModels:
         weights = ScoreWeights()
         assert weights.total() == 100.0
 
-    def test_score_weights_normalize_without_eye_contact(self):
+    def test_score_weights_normalize_without_confidence(self):
         weights = ScoreWeights()
-        normalized = weights.normalize_without(["eyeContact"])
+        normalized = weights.normalize_without(["confidence"])
         assert abs(normalized.total() - 100.0) < 0.1
-        assert normalized.eyeContact == 0.0
-        assert normalized.technical > weights.technical  # Redisbuted
+        assert normalized.confidence == 0.0
+        assert normalized.technical > weights.technical
 
     def test_score_weights_normalize_without_multiple(self):
         weights = ScoreWeights()
-        normalized = weights.normalize_without(["eyeContact", "confidence", "speaking"])
+        normalized = weights.normalize_without(["confidence", "structuredThinking"])
         assert abs(normalized.total() - 100.0) < 0.1
-        assert normalized.eyeContact == 0.0
         assert normalized.confidence == 0.0
-        assert normalized.speaking == 0.0
+        assert normalized.structuredThinking == 0.0
 
     def test_llm_adjustment_clamped(self):
         adj = LLMAdjustment(adjustment=15, reason="Great insight", confidence="low")
@@ -316,10 +314,10 @@ class TestScoringModels:
             score=75,
             communication=80,
             technical=78,
-            eyeContact=None,
+            confidence=None,
             cheat=CheatClassification(level="Clean"),
         )
-        assert result.eyeContact is None
+        assert result.confidence is None
 
     def test_cheat_classification(self):
         clean = CheatClassification(level="Clean")

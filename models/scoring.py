@@ -9,7 +9,6 @@ class TranscriptScores(BaseModel):
     communication: Optional[float] = None
     problemSolving: Optional[float] = None
     technical: Optional[float] = None
-    clarityOfExplanation: Optional[float] = None
     structuredThinking: Optional[float] = None
 
     @field_validator("*", mode="after")
@@ -22,9 +21,8 @@ class TranscriptScores(BaseModel):
 
 class AudioScores(BaseModel):
     confidence: Optional[float] = None
-    speaking: Optional[float] = None
 
-    @field_validator("confidence", "speaking", mode="after")
+    @field_validator("confidence", mode="after")
     @classmethod
     def clamp_optional_0_100(cls, v: Optional[float]) -> Optional[float]:
         if v is not None:
@@ -44,14 +42,11 @@ class VideoScores(BaseModel):
 
 
 class ScoreWeights(BaseModel):
-    technical: float = 22.0
-    communication: float = 17.0
-    problemSolving: float = 17.0
-    clarityOfExplanation: float = 12.0
-    structuredThinking: float = 12.0
-    confidence: float = 8.0
-    speaking: float = 4.0
-    eyeContact: float = 8.0
+    technical: float = 36.0
+    communication: float = 20.0
+    problemSolving: float = 20.0
+    structuredThinking: float = 14.0
+    confidence: float = 10.0
 
     @field_validator("*", mode="after")
     @classmethod
@@ -90,11 +85,8 @@ class PerformanceResult(BaseModel):
     communication: Optional[float] = None
     problemSolving: Optional[float] = None
     technical: Optional[float] = None
-    clarityOfExplanation: Optional[float] = None
     structuredThinking: Optional[float] = None
     confidence: Optional[float] = None
-    speaking: Optional[float] = None
-    eyeContact: Optional[float] = None
     cheat: CheatClassification = CheatClassification()
     llmAdjustment: Optional[LLMAdjustment] = None
     overallSummary: Optional[str] = None

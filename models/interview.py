@@ -18,7 +18,7 @@ class StartSessionRequest(BaseModel):
 
 ALL_TRANSCRIPT_DIMENSIONS = [
     "communication", "problemSolving", "technical",
-    "clarityOfExplanation", "structuredThinking",
+    "structuredThinking",
 ]
 
 

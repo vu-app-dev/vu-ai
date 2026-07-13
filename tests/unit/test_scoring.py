@@ -7,7 +7,6 @@ from models.scoring import (
     LLMAdjustment,
     ScoreWeights,
     TranscriptScores,
-    VideoScores,
 )
 from services.scoring.score_aggregator import ScoreAggregator
 from services.scoring.transcript_scorer import TranscriptScorer, EvaluateAnswerResponse
@@ -101,7 +100,7 @@ class TestTranscriptScorer:
             scores={
                 "communication": 4,
                 "technical": 5,
-                "clarityOfExplanation": 3,
+                "structuredThinking": 3,
                 "problemSolving": 4,
             },
             overallComment="Good",
@@ -113,13 +112,12 @@ class TestTranscriptScorer:
             question="What is gradient descent?",
             transcript="Gradient descent is an optimization algorithm...",
             mock_type="TECHNICAL",
-            active_dimensions=["technical", "communication", "clarityOfExplanation"],
+            active_dimensions=["technical", "communication", "structuredThinking"],
         )
         assert result.technical == 100.0
         assert result.communication == 80.0
-        assert result.clarityOfExplanation == 60.0
+        assert result.structuredThinking == 60.0
         assert result.problemSolving is None
-        assert result.structuredThinking is None
 
     @pytest.mark.asyncio
     async def test_score_with_none_active_dimensions_scores_all(self):
@@ -129,7 +127,6 @@ class TestTranscriptScorer:
                 "communication": 4,
                 "problemSolving": 3,
                 "technical": 4,
-                "clarityOfExplanation": 3,
                 "structuredThinking": 4,
             },
             overallComment="Good",
@@ -154,9 +151,9 @@ class TestScoreAggregatorWeightedAverage:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80,
+            structuredThinking=80,
         )
-        avg = agg.compute_weighted_average(transcript, audio=None, video=None)
+        avg = agg.compute_weighted_average(transcript, audio=None)
         assert 0 <= avg <= 100
         assert avg > 0
 
@@ -164,50 +161,49 @@ class TestScoreAggregatorWeightedAverage:
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80,
+            structuredThinking=80,
         )
-        audio = AudioScores(confidence=78, speaking=82)
-        video = VideoScores(eyeContact=70)
-        avg = agg.compute_weighted_average(transcript, audio, video)
+        audio = AudioScores(confidence=78)
+        avg = agg.compute_weighted_average(transcript, audio)
         assert 0 <= avg <= 100
         assert avg > 0
 
-    def test_null_video_redistributes(self):
+    def test_null_audio_redistributes(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=80,
-            clarityOfExplanation=60, structuredThinking=80,
+            structuredThinking=80,
         )
-        audio = AudioScores(confidence=78, speaking=82)
-        avg_with_video = agg.compute_weighted_average(transcript, audio, VideoScores(eyeContact=70))
-        avg_without_video = agg.compute_weighted_average(transcript, audio, None)
-        assert avg_with_video != avg_without_video or avg_with_video == avg_without_video
+        audio = AudioScores(confidence=78)
+        avg_with_audio = agg.compute_weighted_average(transcript, audio)
+        avg_without_audio = agg.compute_weighted_average(transcript, None)
+        assert avg_with_audio != avg_without_audio or avg_with_audio == avg_without_audio
 
     def test_all_null_gives_zero(self):
         agg = ScoreAggregator()
         transcript = TranscriptScores()
-        avg = agg.compute_weighted_average(transcript, audio=None, video=None)
+        avg = agg.compute_weighted_average(transcript, audio=None)
         assert avg == 0.0
 
     def test_custom_weights(self):
         custom_weights = ScoreWeights(
             technical=50.0, communication=20.0, problemSolving=15.0,
-            clarityOfExplanation=10.0, structuredThinking=5.0,
-            confidence=0.0, speaking=0.0, eyeContact=0.0,
+            structuredThinking=15.0,
+            confidence=0.0,
         )
         agg = ScoreAggregator(weights=custom_weights)
         transcript = TranscriptScores(
             communication=80, problemSolving=60, technical=100,
-            clarityOfExplanation=60, structuredThinking=80,
+            structuredThinking=80,
         )
-        avg = agg.compute_weighted_average(transcript, audio=None, video=None)
-        assert avg == 85.0
+        avg = agg.compute_weighted_average(transcript, audio=None)
+        assert avg == 87.0
 
     def test_missing_transcript_dimensions_are_redistributed(self):
         weights = ScoreWeights(
             technical=50.0, communication=50.0, problemSolving=50.0,
-            clarityOfExplanation=0.0, structuredThinking=0.0,
-            confidence=0.0, speaking=0.0, eyeContact=0.0,
+            structuredThinking=0.0,
+            confidence=0.0,
         )
         agg = ScoreAggregator(weights=weights)
         transcript = TranscriptScores(

@@ -7,7 +7,6 @@ from models.scoring import (
     PerformanceResult,
     ScoreWeights,
     TranscriptScores,
-    VideoScores,
 )
 from prompts import format_prompt
 from services.llm.llm_service import LLMService
@@ -26,22 +25,17 @@ class ScoreAggregator:
         self,
         transcript: TranscriptScores,
         audio: AudioScores | None = None,
-        video: VideoScores | None = None,
     ) -> float:
         exclude_fields = []
         transcript_fields = (
             "communication", "problemSolving", "technical",
-            "clarityOfExplanation", "structuredThinking",
+            "structuredThinking",
         )
         for field_name in transcript_fields:
             if getattr(transcript, field_name) is None:
                 exclude_fields.append(field_name)
         if audio is None or audio.confidence is None:
             exclude_fields.append("confidence")
-        if audio is None or audio.speaking is None:
-            exclude_fields.append("speaking")
-        if video is None or video.eyeContact is None:
-            exclude_fields.append("eyeContact")
 
         weights = self._weights
         if exclude_fields:
@@ -56,10 +50,6 @@ class ScoreAggregator:
                 values[field_name] = getattr(transcript, field_name)
             elif field_name == "confidence":
                 values[field_name] = audio.confidence if audio and audio.confidence is not None else 0
-            elif field_name == "speaking":
-                values[field_name] = audio.speaking if audio and audio.speaking is not None else 0
-            elif field_name == "eyeContact":
-                values[field_name] = video.eyeContact if video and video.eyeContact is not None else 0
 
         if not values:
             return 0.0
@@ -110,10 +100,9 @@ class ScoreAggregator:
         self,
         transcript: TranscriptScores,
         audio: AudioScores | None = None,
-        video: VideoScores | None = None,
         llm_adjustment: LLMAdjustment | None = None,
     ) -> float:
-        avg = self.compute_weighted_average(transcript, audio, video)
+        avg = self.compute_weighted_average(transcript, audio)
         if llm_adjustment:
             avg += llm_adjustment.adjustment
         return max(0.0, min(100.0, avg))

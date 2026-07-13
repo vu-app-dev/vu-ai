@@ -22,15 +22,13 @@ class AudioScorer:
         filler_count: int = 0,
     ) -> AudioScores:
         if duration_seconds <= 0 or word_count == 0:
-            return AudioScores(confidence=0.0, speaking=0.0)
+            return AudioScores(confidence=0.0)
 
         wpm = self._words_per_minute(word_count, duration_seconds)
         confidence = self._confidence_score(wpm, filler_count, duration_seconds)
-        speaking = self._speaking_score(wpm, filler_count, duration_seconds)
 
         return AudioScores(
             confidence=round(confidence, 1),
-            speaking=round(speaking, 1),
         )
 
     @staticmethod
@@ -56,30 +54,6 @@ class AudioScorer:
         filler_penalty = min(filler_rate / MAX_FILLER_PER_MINUTE, 1.0) * 15
 
         return max(0.0, min(100.0, wpm_score - filler_penalty))
-
-    @staticmethod
-    def _speaking_score(wpm: float, filler_count: int, duration_seconds: float) -> float:
-        if wpm <= 0 or duration_seconds <= 0:
-            return 0.0
-
-        if SLOW_WPM <= wpm <= FAST_WPM:
-            pace_score = 100.0
-        elif wpm < SLOW_WPM:
-            pace_score = max(30.0, (wpm / SLOW_WPM) * 100.0)
-        else:
-            pace_score = max(30.0, 100.0 - (wpm - FAST_WPM) * 1.0)
-
-        duration_minutes = duration_seconds / 60
-        filler_rate = filler_count / max(duration_minutes, 0.1)
-        filler_penalty = min(filler_rate / MAX_FILLER_PER_MINUTE, 1.0) * 20
-
-        too_short_penalty = 0.0
-        if duration_seconds < 10:
-            too_short_penalty = 30.0
-        elif duration_seconds < 20:
-            too_short_penalty = 15.0
-
-        return max(0.0, min(100.0, pace_score - filler_penalty - too_short_penalty))
 
     @staticmethod
     def count_fillers(transcript: str) -> int:

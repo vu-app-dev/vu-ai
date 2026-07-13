@@ -22,13 +22,6 @@ UNIVERSAL_ANCHORS = {
         "Strong grasp with accurate details; connects ideas",
         "Deep nuanced understanding; explains principles and implications",
     ],
-    "clarityOfExplanation": [
-        "Confusing, disorganized, impossible to follow",
-        "Jumps between ideas without logical flow",
-        "Followable order; some parts could be clearer",
-        "Well-structured with logical progression",
-        "Crystal-clear, step-by-step with perfect pacing",
-    ],
     "structuredThinking": [
         "No structure; disconnected thoughts",
         "Minimal structure; points without organization",
@@ -59,13 +52,6 @@ TECHNICAL_ANCHORS = {
         "Solid core concepts; gaps in advanced topics",
         "Deep knowledge; implementation details, trade-offs, best practices",
         "Expert-level; internals, edge cases, architectural implications",
-    ],
-    "clarityOfExplanation": [
-        "Incomprehensible or disorganized technical explanation",
-        "Mixes up concepts or skips critical steps",
-        "Logical order; some steps could be clearer",
-        "Clear, methodical; a peer could follow and implement",
-        "Textbook-quality; fundamentals to solution with perfect clarity",
     ],
     "structuredThinking": [
         "No structured approach; jumps to conclusions",
@@ -98,13 +84,6 @@ BEHAVIORAL_ANCHORS = {
         "Articulates technical decisions, trade-offs, reasoning",
         "Deep insight; explains why alternatives were rejected",
     ],
-    "clarityOfExplanation": [
-        "Confusing; cannot distinguish situation, action, result",
-        "Some context but jumps around; key details missing",
-        "Logical order; situation, action, result identifiable",
-        "Well-structured STAR; clear and proportionally detailed",
-        "Masterful narrative; builds tension, quantifies impact",
-    ],
     "structuredThinking": [
         "No structure; disconnected anecdotes",
         "Some structure but mixes stories or loses focus",
@@ -136,13 +115,6 @@ CODING_ANCHORS = {
         "Optimal selections; explains time/space trade-offs",
         "Expert; amortized complexity, cache behavior, optimizations",
     ],
-    "clarityOfExplanation": [
-        "Cannot explain solution; jumps to conclusions",
-        "Explains parts but skips key steps or assumptions",
-        "Step-by-step walkthrough; logic behind each step",
-        "Methodical; listener could implement from explanation",
-        "Multiple abstraction levels; strategy to implementation details",
-    ],
     "structuredThinking": [
         "No structure; jumps to implementation without planning",
         "Some planning but skips constraints or validation",
@@ -162,7 +134,6 @@ _DIMENSION_LABELS = {
     "communication": "Communication",
     "problemSolving": "Problem Solving",
     "technical": "Technical Knowledge",
-    "clarityOfExplanation": "Clarity of Explanation",
     "structuredThinking": "Structured Thinking",
 }
 
