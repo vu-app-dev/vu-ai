@@ -503,6 +503,8 @@ class SessionManager:
             try:
                 perf_data = result.model_dump(exclude={"llmAdjustment"})
                 perf_data["cheat"] = cheat.level
+                for _field in ("eyeContact", "speaking", "clarityOfExplanation"):
+                    perf_data.setdefault(_field, 0)
                 await self._backend_client.create_performance(
                     session.candidateId,
                     data=perf_data,
