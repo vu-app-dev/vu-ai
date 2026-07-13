@@ -977,6 +977,8 @@ async def _handle_end_session(
             "Please watch your email for the next steps."
         )
     closing_audio = await _tts(closing_text)
+    if closing_audio is None:
+        logger.warning("Closing TTS returned None for session %s, browser fallback will be used", session_id)
 
     end_msg = WSSessionEndMessage(
         sessionId=session_id,
