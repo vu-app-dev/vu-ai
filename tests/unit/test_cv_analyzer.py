@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from models.cv import CvAnalyzeResponse
+from models.cv import CvAnalyzeResponse, CvDimensions
 from services.cv.cv_analyzer import CvAnalyzer
 
 
@@ -62,14 +62,54 @@ class TestAnalyzeUnsupported:
         assert result is None
 
 
+class TestCvDimensionsScoring:
+    def test_compute_score_with_dimensions(self):
+        response = CvAnalyzeResponse(
+            skills=["Python", "React"],
+            summary="Test summary",
+            dimensions=CvDimensions(
+                skillsMatch=4, experienceDepth=3, educationFit=3, projectRelevance=5
+            ),
+        )
+        score = response.compute_score()
+        assert score == 76.0
+
+    def test_compute_score_all_fives(self):
+        response = CvAnalyzeResponse(
+            skills=[],
+            summary="",
+            dimensions=CvDimensions(
+                skillsMatch=5, experienceDepth=5, educationFit=5, projectRelevance=5
+            ),
+        )
+        assert response.compute_score() == 100.0
+
+    def test_compute_score_all_ones(self):
+        response = CvAnalyzeResponse(
+            skills=[],
+            summary="",
+            dimensions=CvDimensions(
+                skillsMatch=1, experienceDepth=1, educationFit=1, projectRelevance=1
+            ),
+        )
+        assert response.compute_score() == 20.0
+
+    def test_compute_score_no_dimensions(self):
+        response = CvAnalyzeResponse(skills=[], summary="")
+        assert response.compute_score() is None
+
+
 class TestAnalyzeWithLLM:
     @pytest.mark.asyncio
     async def test_analyze_cv_llm_success(self):
+        dimensions = CvDimensions(
+            skillsMatch=4, experienceDepth=4, educationFit=3, projectRelevance=5
+        )
         mock_llm = AsyncMock()
         mock_llm.generate_json = AsyncMock(return_value=CvAnalyzeResponse(
             skills=["Python", "React", "Node.js"],
             summary="Experienced full-stack developer with 5 years of experience.",
-            score=82.0,
+            dimensions=dimensions,
         ))
         analyzer = CvAnalyzer(llm=mock_llm)
         mock_content = b"dummy pdf content"
@@ -83,7 +123,9 @@ class TestAnalyzeWithLLM:
             )
             assert result is not None
             assert "Python" in result.skills
-            assert result.score == 82.0
+            assert result.dimensions is not None
+            assert result.score is not None
+            assert result.score == result.compute_score()
 
     @pytest.mark.asyncio
     async def test_analyze_cv_llm_failure_returns_null_scores(self):
@@ -97,6 +139,7 @@ class TestAnalyzeWithLLM:
             result = await analyzer.analyze("https://example.com/resume.pdf")
             assert result is not None
             assert result.score is None
+            assert result.dimensions is None
 
     @pytest.mark.asyncio
     async def test_analyze_cv_download_failure(self):
@@ -115,3 +158,4 @@ class TestAnalyzeWithLLM:
             result = await analyzer.analyze("https://example.com/resume.pdf")
             assert result is not None
             assert result.skills == []
+            assert result.dimensions is None

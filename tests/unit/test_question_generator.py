@@ -65,10 +65,25 @@ class TestQuestionCountForTime:
         assert QuestionGenerator.question_count_for_time(10) == 2
 
     def test_standard_interview_reserves_intro_and_closing_time(self):
-        assert QuestionGenerator.question_count_for_time(30) == 6
+        assert QuestionGenerator.question_count_for_time(30) == 9
 
     def test_long_interview_caps_questions(self):
         assert QuestionGenerator.question_count_for_time(60) == 10
+
+    def test_easy_gives_more_questions(self):
+        assert QuestionGenerator.question_count_for_time(30, "EASY") == 10
+
+    def test_hard_gives_fewer_questions(self):
+        assert QuestionGenerator.question_count_for_time(30, "HARD") == 6
+
+    def test_easy_short_interview(self):
+        assert QuestionGenerator.question_count_for_time(15, "EASY") == 6
+
+    def test_hard_short_interview(self):
+        assert QuestionGenerator.question_count_for_time(15, "HARD") == 3
+
+    def test_defaults_to_medium_for_unknown_difficulty(self):
+        assert QuestionGenerator.question_count_for_time(30, "UNKNOWN") == 9
 
 
 class TestFallbackIntro:

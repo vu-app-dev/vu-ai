@@ -91,8 +91,9 @@ class TestScoreRubric:
         prompt = format_prompt("analyze_cv",
                                cv_text="Software Engineer",
                                job_context="Senior role")
-        assert "0-30" in prompt or "Poor" in prompt
-        assert "81-100" in prompt or "Excellent" in prompt
+        assert "1-5" in prompt or "BARS" in prompt
+        assert "skillsMatch" in prompt
+        assert "experienceDepth" in prompt
 
     def test_adjust_score_prompt_includes_range(self):
         prompt = format_prompt("adjust_score", weighted_score=75,

@@ -57,7 +57,7 @@ class QuestionGenerator:
         topics = _normalize_str_list(mock_data.get("topics", []))
         estimated_time = mock_data.get("estimatedTimeInMinutes", 30)
         mock_description = mock_data.get("description", "")
-        num_questions = self.question_count_for_time(estimated_time)
+        num_questions = self.question_count_for_time(estimated_time, difficulty)
 
         try:
             existing = self._format_existing_questions(mock_questions)
@@ -143,14 +143,20 @@ class QuestionGenerator:
 
         return self._fallback_intro(mock_type, technologies or [])
 
+    _MINUTES_PER_QUESTION = {"EASY": 2, "MEDIUM": 3, "HARD": 4}
+
     @staticmethod
-    def question_count_for_time(estimated_time_minutes: int | float | None) -> int:
+    def question_count_for_time(
+        estimated_time_minutes: int | float | None,
+        difficulty: str = "MEDIUM",
+    ) -> int:
         try:
             estimated = int(estimated_time_minutes or 30)
         except (TypeError, ValueError):
             estimated = 30
         usable_minutes = max(0, estimated - 3)  # 2 min intro + 1 min closing reserve.
-        count = usable_minutes // 4
+        per_q = QuestionGenerator._MINUTES_PER_QUESTION.get(difficulty, 3)
+        count = usable_minutes // per_q
         minimum = 2 if estimated < 12 else 3
         return max(minimum, min(10, count))
 

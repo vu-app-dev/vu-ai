@@ -111,6 +111,7 @@ class CvAnalyzer:
             response = await self._llm.generate_json(prompt, CvAnalyzeResponse)
 
             if response:
+                response.score = response.compute_score()
                 return response
 
         except Exception as e:

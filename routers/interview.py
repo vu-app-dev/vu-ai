@@ -310,7 +310,8 @@ async def _prepare_questions_for_current_mock(session) -> list[Question]:
         questions = QuestionGenerator._fallback_questions([], mock_type, difficulty)
 
     max_questions = QuestionGenerator.question_count_for_time(
-        mock_data.get("estimatedTimeInMinutes", 30)
+        mock_data.get("estimatedTimeInMinutes", 30),
+        mock_data.get("difficulty", "MEDIUM"),
     )
     questions = _dedupe_questions(questions, existing_texts=_all_question_texts(session))
     questions = questions[:max_questions]
